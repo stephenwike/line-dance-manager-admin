@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@contract/*": ["../line-dance-manager/contract/*"]
     }
   },
   "include": [
