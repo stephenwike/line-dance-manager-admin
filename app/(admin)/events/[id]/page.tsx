@@ -438,15 +438,38 @@ export default function EventDetailPage() {
                         {/* Lesson editor */}
                         {editingLessons ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                {/* Bulk taught toggle */}
+                                {lessonDrafts.length > 0 && (
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, background: "var(--surface-raised)", border: "1px solid var(--border)" }}>
+                                        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                                            {lessonDrafts.every((d) => d.committed) ? "All lessons marked as taught" : "Mark all as taught"}
+                                        </span>
+                                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "var(--success-text)" }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={lessonDrafts.every((d) => d.committed)}
+                                                onChange={(e) => setLessonDrafts((prev) => prev.map((d) => ({ ...d, committed: e.target.checked })))}
+                                            />
+                                            All taught
+                                        </label>
+                                    </div>
+                                )}
                                 {lessonDrafts.length === 0 && (
                                     <p style={{ fontSize: 13, color: "var(--text-tertiary)", textAlign: "center", padding: "8px 0" }}>No lessons yet. Add one below.</p>
                                 )}
                                 {lessonDrafts.map((d, idx) => (
-                                    <div key={d.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                                    <div key={d.id} style={{ border: `1px solid ${d.committed ? "rgba(16,185,129,0.3)" : "var(--border)"}`, borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, background: d.committed ? "var(--success-subtle)" : "var(--surface)" }}>
                                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>
-                                                Lesson {idx + 1}{d.committed ? " · ✓ committed" : ""}
-                                            </span>
+                                            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={d.committed}
+                                                    onChange={(e) => updateLessonDraft(d.id, { committed: e.target.checked })}
+                                                />
+                                                <span style={{ fontSize: 12, fontWeight: 600, color: d.committed ? "var(--success-text)" : "var(--text-secondary)" }}>
+                                                    Lesson {idx + 1}{d.committed ? " · ✓ taught" : " · not yet committed"}
+                                                </span>
+                                            </label>
                                             <button type="button" onClick={() => removeLessonDraft(d.id)}
                                                 style={{ fontSize: 12, color: "var(--danger)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
                                                 Remove
