@@ -71,10 +71,27 @@ function GreenCheck({ label }: { label: string }) {
     );
 }
 
-function CommitCard({ ev, committing, onCommit }: { ev: CommitEvent; committing: boolean; onCommit: () => void }) {
+function CommitCard({ ev, committing, done, error, onCommit }: {
+    ev: CommitEvent; committing: boolean; done: boolean; error: string | null; onCommit: () => void;
+}) {
     const uncommitted = ev.lessons.filter((l) => !l.committed);
+
+    if (done) {
+        return (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 12, background: "var(--success-subtle)", border: "1px solid rgba(16,185,129,0.2)" }}>
+                <span style={{ fontSize: 20, color: "var(--success)" }}>✓</span>
+                <div>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: "var(--success-text)" }}>{ev.eventType?.title ?? ev.eventTypeId}</p>
+                    <p style={{ fontSize: 12, color: "var(--success-text)", opacity: 0.8, marginTop: 2 }}>
+                        {fmtDate(ev.date)} · {ev.lessons.length} lesson{ev.lessons.length !== 1 ? "s" : ""} committed
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
+        <div style={{ background: "var(--surface)", border: `1px solid ${error ? "var(--danger)" : "var(--border)"}`, borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                 <div>
                     <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
@@ -103,15 +120,14 @@ function CommitCard({ ev, committing, onCommit }: { ev: CommitEvent; committing:
                             <span style={{ color: l.committed ? "var(--text-tertiary)" : "var(--text-primary)" }}>
                                 {l.dance ?? "Unnamed dance"}
                             </span>
-                            {l.level && (
-                                <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>· {l.level}</span>
-                            )}
-                            {l.time && (
-                                <span style={{ fontSize: 11, color: "var(--text-tertiary)", marginLeft: "auto" }}>{l.time}</span>
-                            )}
+                            {l.level && <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>· {l.level}</span>}
+                            {l.time && <span style={{ fontSize: 11, color: "var(--text-tertiary)", marginLeft: "auto" }}>{l.time}</span>}
                         </div>
                     ))}
                 </div>
+            )}
+            {error && (
+                <p style={{ marginTop: 10, fontSize: 12, color: "var(--danger)" }}>Failed: {error}</p>
             )}
             <div style={{ marginTop: 10 }}>
                 <Link href={`/events/${ev._id}`} style={{ fontSize: 12, color: "var(--text-tertiary)", textDecoration: "underline" }}>
@@ -198,6 +214,8 @@ export default function DashboardPage() {
     const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState(true);
     const [committing, setCommitting] = useState<string | null>(null);
+    const [commitDone, setCommitDone] = useState<Set<string>>(new Set());
+    const [commitErr, setCommitErr] = useState<Record<string, string>>({});
 
     useEffect(() => {
         const now = new Date();
@@ -218,15 +236,19 @@ export default function DashboardPage() {
 
     async function commitEvent(eventId: string) {
         setCommitting(eventId);
+        setCommitErr((prev) => { const n = { ...prev }; delete n[eventId]; return n; });
         try {
             const res = await fetch("/api/admin/bld/commit-lessons", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ eventId }),
             });
-            if (res.ok) {
-                setCommitEvents((prev) => prev.filter((e) => e._id !== eventId));
-            }
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error ?? "Commit failed");
+            setCommitDone((prev) => new Set([...prev, eventId]));
+            setTimeout(() => setCommitEvents((prev) => prev.filter((e) => e._id !== eventId)), 2000);
+        } catch (e: unknown) {
+            setCommitErr((prev) => ({ ...prev, [eventId]: e instanceof Error ? e.message : String(e) }));
         } finally {
             setCommitting(null);
         }
@@ -261,6 +283,8 @@ export default function DashboardPage() {
                                         key={ev._id}
                                         ev={ev}
                                         committing={committing === ev._id}
+                                        done={commitDone.has(ev._id)}
+                                        error={commitErr[ev._id] ?? null}
                                         onCommit={() => commitEvent(ev._id)}
                                     />
                                 ))}

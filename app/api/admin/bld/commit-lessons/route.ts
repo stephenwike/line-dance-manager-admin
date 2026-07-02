@@ -72,29 +72,21 @@ export async function POST(req: Request) {
         }
 
         const db = await getBldDb();
-        const result = await db.collection("events").updateOne(
-            { _id: new ObjectId(eventId) },
-            [
-                {
-                    $set: {
-                        lessons: {
-                            $map: {
-                                input: "$lessons",
-                                as: "l",
-                                in: { $mergeObjects: ["$$l", { committed: true }] },
-                            },
-                        },
-                        updatedAt: new Date(),
-                    },
-                },
-            ]
+        const oid = new ObjectId(eventId);
+
+        const ev = await db.collection("events").findOne({ _id: oid }, { projection: { lessons: 1 } });
+        if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 });
+
+        const lessons = (Array.isArray(ev.lessons) ? ev.lessons : []).map(
+            (l: Record<string, unknown>) => ({ ...l, committed: true })
         );
 
-        if (result.matchedCount === 0) {
-            return NextResponse.json({ error: "Event not found" }, { status: 404 });
-        }
+        await db.collection("events").updateOne(
+            { _id: oid },
+            { $set: { lessons, updatedAt: new Date() } }
+        );
 
-        return NextResponse.json({ ok: true, modified: result.modifiedCount > 0 });
+        return NextResponse.json({ ok: true });
     } catch (e: unknown) {
         return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
     }
