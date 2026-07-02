@@ -12,6 +12,7 @@ const NAV = [
     { href: "/reports", label: "Reports", icon: "⚑", section: null },
     { href: "/feed-reports", label: "Feed Reports", icon: "📊", section: "DJ Feed" },
     { href: "/feed-transactions", label: "Feed Transactions", icon: "💳", section: null },
+    { href: "/feed-free-access", label: "Free Access", icon: "🔓", section: null },
     { href: "/venues", label: "Venues", icon: "🏠", section: "Scheduling" },
     { href: "/event-types", label: "Event Types", icon: "📅", section: null },
     { href: "/frequencies", label: "Frequencies", icon: "🔁", section: null },
