@@ -1036,11 +1036,43 @@ function DanceCard({ dance, onRemove }: { dance: PendingDance; onRemove: (id: st
     );
 }
 
+// ── NewDanceCard ──────────────────────────────────────────────────────────────
+
+const BLANK_DANCE: PendingDance = {
+    id: "new",
+    danceName: "",
+    songTitle: "",
+    artist: "",
+    choreographer: "",
+    difficulty: "Beginner",
+    stepsheetUrl: null,
+    submittedByUserId: null,
+    submittedAt: new Date().toISOString(),
+};
+
+function NewDanceCard({ onDone }: { onDone: () => void }) {
+    async function handleConfirm(track: TrackInput, overrides: DanceOverrides, additionalTracks: TrackInput[]) {
+        const res = await fetch("/api/admin/dances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ track, overrides, additionalTracks }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.error ?? `Server error ${res.status}`);
+        }
+        onDone();
+    }
+
+    return <ApprovePanel dance={BLANK_DANCE} onConfirm={handleConfirm} onCancel={onDone} />;
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DancesPage() {
     const [dances, setDances] = useState<PendingDance[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showNewDance, setShowNewDance] = useState(false);
 
     useEffect(() => {
         fetch("/api/admin/dances")
@@ -1049,9 +1081,28 @@ export default function DancesPage() {
             .finally(() => setLoading(false));
     }, []);
 
+    const addButton = (
+        <button
+            type="button"
+            onClick={() => setShowNewDance(true)}
+            disabled={showNewDance}
+            style={{
+                padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                border: "1px solid var(--accent)", background: "transparent",
+                color: "var(--accent-text)", cursor: showNewDance ? "default" : "pointer",
+                opacity: showNewDance ? 0.4 : 1,
+            }}
+        >
+            + Add Dance
+        </button>
+    );
+
     return (
-        <PageShell title="Pending Dances" count={dances.length} loading={loading}>
-            {dances.length === 0 && !loading
+        <PageShell title="Pending Dances" count={dances.length} loading={loading} actions={addButton}>
+            {showNewDance && (
+                <NewDanceCard onDone={() => setShowNewDance(false)} />
+            )}
+            {dances.length === 0 && !loading && !showNewDance
                 ? <EmptyState message="No dances pending review." />
                 : dances.map((dance) => (
                     <DanceCard

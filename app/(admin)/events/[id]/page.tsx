@@ -7,15 +7,6 @@ import { computeDurationMinutes, minutesToTime12, parseTime12ToMinutes } from "@
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface Lesson {
-    time: string | null;
-    danceId: string | null;
-    dance: string | null;
-    level: string | null;
-    link: string | null;
-    committed: boolean;
-}
-
 interface LessonDraft {
     id: string;
     time: string;
@@ -24,6 +15,15 @@ interface LessonDraft {
     level: string;
     link: string;
     committed: boolean;
+}
+
+interface EventDraft {
+    startTime: string;
+    endTime: string;
+    isCancelled: boolean;
+    cancelNote: string;
+    substitute: string;
+    lessons: LessonDraft[];
 }
 
 interface DanceHit { _id: string; danceName: string; stepsheet: string | null; difficulty: string | null }
@@ -38,7 +38,7 @@ interface EventDetail {
     isCancelled: boolean;
     cancelNote: string | null;
     substitute: string | null;
-    lessons: Lesson[];
+    lessons: { time: string | null; danceId: string | null; dance: string | null; level: string | null; link: string | null; committed: boolean }[];
     eventType: { _id: string; title: string; level: string; price: string } | null;
     venue: { _id: string; name: string; address: string | null; city: string | null; state: string | null } | null;
 }
@@ -47,11 +47,39 @@ interface EventDetail {
 
 function uid() { return Math.random().toString(16).slice(2) + Date.now().toString(16); }
 
-function suggestNextTime(drafts: LessonDraft[], eventStartTime: string): string {
-    const last = [...drafts].reverse().find((d) => d.time.trim());
-    if (!last) return eventStartTime;
+function nextLessonTime(lessons: LessonDraft[], fallback: string): string {
+    const last = [...lessons].reverse().find((d) => d.time.trim());
+    if (!last) return fallback;
     const mins = parseTime12ToMinutes(last.time);
-    return mins !== null ? minutesToTime12(mins + 30) : "";
+    return mins !== null ? minutesToTime12(mins + 30) : fallback;
+}
+
+function normalizeDraft(ev: EventDetail): EventDraft {
+    return {
+        startTime: ev.startTime,
+        endTime: ev.endTime,
+        isCancelled: ev.isCancelled,
+        cancelNote: ev.cancelNote ?? "",
+        substitute: ev.substitute ?? "",
+        lessons: ev.lessons.map((l) => ({
+            id: uid(),
+            time: l.time ?? "",
+            danceId: l.danceId ?? null,
+            dance: l.dance ?? "",
+            level: l.level ?? "",
+            link: l.link ?? "",
+            committed: l.committed,
+        })),
+    };
+}
+
+function statusLabel(draft: EventDraft | null, ev: EventDetail | null) {
+    if (!draft || !ev) return null;
+    if (draft.isCancelled) return <Badge label="Cancelled" color="red" />;
+    if (draft.lessons.length === 0) return <Badge label="Unplanned" color="orange" />;
+    if (draft.lessons.every((l) => l.committed)) return <Badge label="Committed" color="green" />;
+    if (draft.lessons.some((l) => l.committed)) return <Badge label="Partially committed" color="orange" />;
+    return <Badge label="Planned" color="blue" />;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -67,14 +95,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
             {children}
         </label>
     );
-}
-
-function statusBadge(ev: EventDetail) {
-    if (ev.isCancelled) return <Badge label="Cancelled" color="red" />;
-    if (ev.lessons.length === 0) return <Badge label="Unplanned" color="orange" />;
-    if (ev.lessons.every((l) => l.committed)) return <Badge label="Committed" color="green" />;
-    if (ev.lessons.some((l) => l.committed)) return <Badge label="Partially committed" color="orange" />;
-    return <Badge label="Planned" color="blue" />;
 }
 
 // ── Dance search autocomplete ────────────────────────────────────────────────
@@ -153,27 +173,12 @@ export default function EventDetailPage() {
     const router = useRouter();
 
     const [ev, setEv] = useState<EventDetail | null>(null);
+    const [draft, setDraft] = useState<EventDraft | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadErr, setLoadErr] = useState<string | null>(null);
-
-    // Event field edit state
-    const [editing, setEditing] = useState(false);
-    const [editStart, setEditStart] = useState("");
-    const [editEnd, setEditEnd] = useState("");
-    const [editCancelled, setEditCancelled] = useState(false);
-    const [editCancelNote, setEditCancelNote] = useState("");
-    const [editSubstitute, setEditSubstitute] = useState(false);
-    const [editSubName, setEditSubName] = useState("");
     const [saving, setSaving] = useState(false);
     const [saveErr, setSaveErr] = useState<string | null>(null);
-
-    // Lesson edit state
-    const [editingLessons, setEditingLessons] = useState(false);
-    const [lessonDrafts, setLessonDrafts] = useState<LessonDraft[]>([]);
-    const [savingLessons, setSavingLessons] = useState(false);
-    const [lessonSaveErr, setLessonSaveErr] = useState<string | null>(null);
-
-    const [committing, setCommitting] = useState<"all" | number | null>(null);
+    const [saved, setSaved] = useState(false);
 
     async function load() {
         setLoading(true);
@@ -182,6 +187,7 @@ export default function EventDetailPage() {
             const data = await fetch(`/api/admin/bld/events/${id}`).then((r) => r.json());
             if (data.error) throw new Error(data.error);
             setEv(data);
+            setDraft(normalizeDraft(data));
         } catch (e: unknown) {
             setLoadErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -191,44 +197,67 @@ export default function EventDetailPage() {
 
     useEffect(() => { if (id) load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    function openEdit() {
-        if (!ev) return;
-        setEditStart(ev.startTime);
-        setEditEnd(ev.endTime);
-        setEditCancelled(ev.isCancelled);
-        setEditCancelNote(ev.cancelNote ?? "");
-        setEditSubstitute(!!ev.substitute);
-        setEditSubName(ev.substitute ?? "");
-        setSaveErr(null);
-        setEditing(true);
+    function setField<K extends keyof EventDraft>(key: K, value: EventDraft[K]) {
+        setDraft((prev) => prev ? { ...prev, [key]: value } : prev);
+        setSaved(false);
     }
 
-    async function saveEdit() {
-        if (!ev) return;
-        if (parseTime12ToMinutes(editStart) === null) { setSaveErr("Invalid start time"); return; }
-        if (parseTime12ToMinutes(editEnd) === null) { setSaveErr("Invalid end time"); return; }
-        if (!editCancelled) {
-            const dur = computeDurationMinutes(editStart, editEnd);
+    function updateLesson(lessonId: string, patch: Partial<LessonDraft>) {
+        setDraft((prev) => {
+            if (!prev) return prev;
+            return { ...prev, lessons: prev.lessons.map((l) => l.id === lessonId ? { ...l, ...patch } : l) };
+        });
+        setSaved(false);
+    }
+
+    function addLesson() {
+        setDraft((prev) => {
+            if (!prev) return prev;
+            const time = nextLessonTime(prev.lessons, prev.startTime);
+            return { ...prev, lessons: [...prev.lessons, { id: uid(), time, danceId: null, dance: "", level: "", link: "", committed: false }] };
+        });
+        setSaved(false);
+    }
+
+    function removeLesson(lessonId: string) {
+        setDraft((prev) => prev ? { ...prev, lessons: prev.lessons.filter((l) => l.id !== lessonId) } : prev);
+        setSaved(false);
+    }
+
+    async function save() {
+        if (!draft) return;
+        if (parseTime12ToMinutes(draft.startTime) === null) { setSaveErr("Invalid start time"); return; }
+        if (parseTime12ToMinutes(draft.endTime) === null) { setSaveErr("Invalid end time"); return; }
+        if (!draft.isCancelled) {
+            const dur = computeDurationMinutes(draft.startTime, draft.endTime);
             if (!dur || dur <= 0) { setSaveErr("End time must be after start time"); return; }
         }
-        if (editSubstitute && !editSubName.trim()) { setSaveErr("Substitute name required"); return; }
         setSaveErr(null);
         setSaving(true);
         try {
+            const lessons = draft.lessons.map((l) => ({
+                time: l.time.trim() || null,
+                danceId: l.danceId,
+                dance: l.dance.trim() || null,
+                level: l.level.trim() || null,
+                link: l.link.trim() || null,
+                committed: l.committed,
+            }));
             const res = await fetch(`/api/admin/bld/events/${id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    startTime: editStart.trim(),
-                    endTime: editEnd.trim(),
-                    isCancelled: editCancelled,
-                    cancelNote: editCancelled && editCancelNote.trim() ? editCancelNote.trim() : null,
-                    substitute: editSubstitute && editSubName.trim() ? editSubName.trim() : null,
+                    startTime: draft.startTime.trim(),
+                    endTime: draft.endTime.trim(),
+                    isCancelled: draft.isCancelled,
+                    cancelNote: draft.isCancelled && draft.cancelNote.trim() ? draft.cancelNote.trim() : null,
+                    substitute: !draft.isCancelled && draft.substitute.trim() ? draft.substitute.trim() : null,
+                    lessons,
                 }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error ?? "Save failed");
-            setEditing(false);
+            setSaved(true);
             await load();
         } catch (e: unknown) {
             setSaveErr(e instanceof Error ? e.message : String(e));
@@ -237,94 +266,14 @@ export default function EventDetailPage() {
         }
     }
 
-    function startEditLessons() {
-        if (!ev) return;
-        setLessonDrafts(ev.lessons.map((l) => ({
-            id: uid(),
-            time: l.time ?? "",
-            danceId: l.danceId ?? null,
-            dance: l.dance ?? "",
-            level: l.level ?? "",
-            link: l.link ?? "",
-            committed: l.committed,
-        })));
-        setLessonSaveErr(null);
-        setEditingLessons(true);
-    }
-
-    function updateLessonDraft(draftId: string, patch: Partial<LessonDraft>) {
-        setLessonDrafts((prev) => prev.map((d) => d.id === draftId ? { ...d, ...patch } : d));
-    }
-
-    function addLessonDraft() {
-        const suggested = ev ? suggestNextTime(lessonDrafts, ev.startTime) : "";
-        setLessonDrafts((prev) => [...prev, { id: uid(), time: suggested, danceId: null, dance: "", level: "", link: "", committed: false }]);
-    }
-
-    function removeLessonDraft(draftId: string) {
-        setLessonDrafts((prev) => prev.filter((d) => d.id !== draftId));
-    }
-
-    async function saveLessons() {
-        setSavingLessons(true);
-        setLessonSaveErr(null);
-        try {
-            const lessons = lessonDrafts.map((d) => ({
-                time: d.time.trim() || null,
-                danceId: d.danceId,
-                dance: d.dance.trim() || null,
-                level: d.level.trim() || null,
-                link: d.link.trim() || null,
-                committed: d.committed,
-            }));
-            const res = await fetch(`/api/admin/bld/events/${id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ lessons }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error ?? "Save failed");
-            setEditingLessons(false);
-            await load();
-        } catch (e: unknown) {
-            setLessonSaveErr(e instanceof Error ? e.message : String(e));
-        } finally {
-            setSavingLessons(false);
-        }
-    }
-
-    async function commitLesson(idx: "all" | number) {
-        if (!ev) return;
-        setCommitting(idx);
-        try {
-            const updated = ev.lessons.map((l, i) =>
-                idx === "all" ? { ...l, committed: true } : i === idx ? { ...l, committed: true } : l
-            );
-            const res = await fetch(`/api/admin/bld/events/${id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ lessons: updated }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error ?? "Failed to commit");
-            setEv((prev) => prev ? { ...prev, lessons: updated } : prev);
-        } catch {
-            await load();
-        } finally {
-            setCommitting(null);
-        }
-    }
-
-    const uncommittedCount = ev?.lessons.filter((l) => !l.committed).length ?? 0;
     const venueLine = ev?.venue
         ? [ev.venue.name, ev.venue.address, ev.venue.city, ev.venue.state].filter(Boolean).join(", ")
         : null;
-    const durMins = ev ? computeDurationMinutes(ev.startTime, ev.endTime) ?? ev.durationMinutes : 0;
 
     if (loading) {
         return <div style={{ padding: "40px 36px", color: "var(--text-tertiary)", fontSize: 14 }}>Loading…</div>;
     }
-    if (loadErr || !ev) {
+    if (loadErr || !ev || !draft) {
         return (
             <div style={{ padding: "40px 36px" }}>
                 <p style={{ color: "var(--danger)", marginBottom: 12 }}>{loadErr ?? "Event not found"}</p>
@@ -332,6 +281,7 @@ export default function EventDetailPage() {
             </div>
         );
     }
+
 
     return (
         <div style={{ padding: "32px 36px", maxWidth: 760 }}>
@@ -345,231 +295,132 @@ export default function EventDetailPage() {
                         <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3 }}>
                             {ev.eventType?.title ?? "Event"}
                         </h1>
-                        {venueLine && <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 3 }}>{venueLine}</p>}
+                        <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 3 }}>
+                            {ev.date}
+                            {venueLine ? ` · ${venueLine}` : ""}
+                        </p>
                     </div>
-                    {statusBadge(ev)}
+                    {statusLabel(draft, ev)}
                 </div>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {/* Event info card */}
-                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
-                    {!editing ? (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{ev.date}</p>
-                                <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                                    {ev.startTime} – {ev.endTime}
-                                    {durMins > 0 && <span style={{ color: "var(--text-tertiary)" }}> · {durMins} min</span>}
-                                </p>
-                                {ev.isCancelled && <p style={{ fontSize: 12, color: "var(--danger)" }}>Cancelled{ev.cancelNote ? `: ${ev.cancelNote}` : ""}</p>}
-                                {ev.substitute && <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>Substitute: {ev.substitute}</p>}
-                                {ev.eventType && <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{ev.eventType.level} · {ev.eventType.price}</p>}
-                            </div>
-                            <ActionButton label="Edit" variant="ghost" onClick={openEdit} />
-                        </div>
-                    ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                                <Field label="Start time">
-                                    <input value={editStart} onChange={(e) => setEditStart(e.target.value)} placeholder="6:00 PM" style={inputStyle} />
-                                </Field>
-                                <Field label="End time">
-                                    <input value={editEnd} onChange={(e) => setEditEnd(e.target.value)} placeholder="9:00 PM" style={inputStyle} />
-                                </Field>
-                            </div>
-                            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-                                <input type="checkbox" checked={editCancelled} onChange={(e) => setEditCancelled(e.target.checked)} />
-                                Cancelled
-                            </label>
-                            {editCancelled && (
-                                <Field label="Cancellation note">
-                                    <input value={editCancelNote} onChange={(e) => setEditCancelNote(e.target.value)} placeholder="Reason…" style={inputStyle} />
-                                </Field>
-                            )}
-                            {!editCancelled && (
-                                <>
-                                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-                                        <input type="checkbox" checked={editSubstitute} onChange={(e) => setEditSubstitute(e.target.checked)} />
-                                        Substitute instructor
-                                    </label>
-                                    {editSubstitute && (
-                                        <Field label="Substitute name">
-                                            <input value={editSubName} onChange={(e) => setEditSubName(e.target.value)} placeholder="Jane Smith" style={inputStyle} />
-                                        </Field>
-                                    )}
-                                </>
-                            )}
-                            {saveErr && <p style={{ fontSize: 13, color: "var(--danger)" }}>{saveErr}</p>}
-                            <div style={{ display: "flex", gap: 8 }}>
-                                <ActionButton label={saving ? "Saving…" : "Save"} loading={saving} onClick={saveEdit} />
-                                <ActionButton label="Cancel" variant="ghost" onClick={() => setEditing(false)} />
-                            </div>
-                        </div>
+                {/* Event details */}
+                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Event details</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                        <Field label="Start time">
+                            <input value={draft.startTime} onChange={(e) => setField("startTime", e.target.value)} placeholder="6:00 PM" style={inputStyle} />
+                        </Field>
+                        <Field label="End time">
+                            <input value={draft.endTime} onChange={(e) => setField("endTime", e.target.value)} placeholder="9:00 PM" style={inputStyle} />
+                        </Field>
+                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                        <input type="checkbox" checked={draft.isCancelled} onChange={(e) => setField("isCancelled", e.target.checked)} />
+                        Cancelled
+                    </label>
+                    {draft.isCancelled && (
+                        <Field label="Cancellation note">
+                            <input value={draft.cancelNote} onChange={(e) => setField("cancelNote", e.target.value)} placeholder="Reason…" style={inputStyle} />
+                        </Field>
+                    )}
+                    {!draft.isCancelled && (
+                        <Field label="Substitute (optional)">
+                            <input value={draft.substitute} onChange={(e) => setField("substitute", e.target.value)} placeholder="Substitute instructor name" style={inputStyle} />
+                        </Field>
                     )}
                 </div>
 
                 {/* Lessons */}
-                {!ev.isCancelled && (
+                {!draft.isCancelled && (
                     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
-                        {/* Lessons header */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: editingLessons ? 16 : 12 }}>
-                            <div>
-                                <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>Lessons</p>
-                                {!editingLessons && uncommittedCount > 0 && (
-                                    <p style={{ fontSize: 11, color: "var(--warning-text)", marginTop: 2 }}>{uncommittedCount} uncommitted</p>
-                                )}
-                            </div>
-                            {!editingLessons && (
-                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                    {uncommittedCount > 1 && (
-                                        <ActionButton
-                                            label={committing === "all" ? "Committing…" : "Commit all"}
-                                            loading={committing === "all"}
-                                            variant="success"
-                                            onClick={() => commitLesson("all")}
-                                        />
-                                    )}
-                                    <ActionButton label="Edit lessons" variant="ghost" onClick={startEditLessons} />
-                                </div>
-                            )}
+                        <div style={{ marginBottom: 14 }}>
+                            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Lessons</p>
                         </div>
 
-                        {/* Lesson editor */}
-                        {editingLessons ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                {/* Bulk taught toggle */}
-                                {lessonDrafts.length > 0 && (
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, background: "var(--surface-raised)", border: "1px solid var(--border)" }}>
-                                        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                                            {lessonDrafts.every((d) => d.committed) ? "All lessons marked as taught" : "Mark all as taught"}
-                                        </span>
-                                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "var(--success-text)" }}>
+                        {draft.lessons.length === 0 && (
+                            <p style={{ fontSize: 13, color: "var(--text-tertiary)", textAlign: "center", padding: "12px 0 4px" }}>
+                                No lessons yet. Add one below.
+                            </p>
+                        )}
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {draft.lessons.map((l, idx) => (
+                                <div key={l.id} style={{
+                                    border: `1px solid ${l.committed ? "rgba(16,185,129,0.3)" : "var(--border)"}`,
+                                    borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8,
+                                    background: l.committed ? "var(--success-subtle)" : "var(--surface-raised)",
+                                }}>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                                             <input
                                                 type="checkbox"
-                                                checked={lessonDrafts.every((d) => d.committed)}
-                                                onChange={(e) => setLessonDrafts((prev) => prev.map((d) => ({ ...d, committed: e.target.checked })))}
+                                                checked={l.committed}
+                                                onChange={(e) => updateLesson(l.id, { committed: e.target.checked })}
                                             />
-                                            All taught
+                                            <span style={{ fontSize: 12, fontWeight: 600, color: l.committed ? "var(--success-text)" : "var(--text-secondary)" }}>
+                                                Lesson {idx + 1}{l.committed ? " · ✓ taught" : ""}
+                                            </span>
                                         </label>
+                                        <button type="button" onClick={() => removeLesson(l.id)}
+                                            style={{ fontSize: 12, color: "var(--danger)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                                            Remove
+                                        </button>
                                     </div>
-                                )}
-                                {lessonDrafts.length === 0 && (
-                                    <p style={{ fontSize: 13, color: "var(--text-tertiary)", textAlign: "center", padding: "8px 0" }}>No lessons yet. Add one below.</p>
-                                )}
-                                {lessonDrafts.map((d, idx) => (
-                                    <div key={d.id} style={{ border: `1px solid ${d.committed ? "rgba(16,185,129,0.3)" : "var(--border)"}`, borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, background: d.committed ? "var(--success-subtle)" : "var(--surface)" }}>
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={d.committed}
-                                                    onChange={(e) => updateLessonDraft(d.id, { committed: e.target.checked })}
-                                                />
-                                                <span style={{ fontSize: 12, fontWeight: 600, color: d.committed ? "var(--success-text)" : "var(--text-secondary)" }}>
-                                                    Lesson {idx + 1}{d.committed ? " · ✓ taught" : " · not yet committed"}
-                                                </span>
-                                            </label>
-                                            <button type="button" onClick={() => removeLessonDraft(d.id)}
-                                                style={{ fontSize: 12, color: "var(--danger)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                                                Remove
-                                            </button>
-                                        </div>
-                                        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr 1fr", gap: 8 }}>
-                                            <Field label="Time">
-                                                <input value={d.time} onChange={(e) => updateLessonDraft(d.id, { time: e.target.value })}
-                                                    placeholder="6:45 PM" style={inputStyle} />
-                                            </Field>
-                                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Dance</span>
-                                                    {d.danceId && (
-                                                        <button type="button" onClick={() => updateLessonDraft(d.id, { danceId: null, dance: "", level: "", link: "" })}
-                                                            style={{ fontSize: 11, color: "var(--text-tertiary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                                                            Clear
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                <DanceSearchInput
-                                                    value={d.dance}
-                                                    disabled={!!d.danceId}
-                                                    onChange={(v) => updateLessonDraft(d.id, { dance: v })}
-                                                    onPick={(hit) => updateLessonDraft(d.id, {
-                                                        danceId: hit._id,
-                                                        dance: hit.danceName,
-                                                        level: hit.difficulty ?? d.level,
-                                                        link: hit.stepsheet ?? d.link,
-                                                    })}
-                                                />
+                                    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr 1fr", gap: 8 }}>
+                                        <Field label="Time">
+                                            <input value={l.time} onChange={(e) => updateLesson(l.id, { time: e.target.value })}
+                                                placeholder="6:45 PM" style={inputStyle} />
+                                        </Field>
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Dance</span>
+                                                {l.danceId && (
+                                                    <button type="button" onClick={() => updateLesson(l.id, { danceId: null, dance: "", level: "", link: "" })}
+                                                        style={{ fontSize: 11, color: "var(--text-tertiary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                                                        Clear
+                                                    </button>
+                                                )}
                                             </div>
-                                            <Field label="Level">
-                                                <input value={d.level} onChange={(e) => updateLessonDraft(d.id, { level: e.target.value })}
-                                                    placeholder="Absolute Beginner" style={inputStyle} />
-                                            </Field>
-                                            <Field label="Link">
-                                                <input value={d.link} onChange={(e) => updateLessonDraft(d.id, { link: e.target.value })}
-                                                    placeholder="Stepsheet URL" style={inputStyle} />
-                                            </Field>
+                                            <DanceSearchInput
+                                                value={l.dance}
+                                                disabled={!!l.danceId}
+                                                onChange={(v) => updateLesson(l.id, { dance: v })}
+                                                onPick={(hit) => updateLesson(l.id, {
+                                                    danceId: hit._id,
+                                                    dance: hit.danceName,
+                                                    level: hit.difficulty ?? l.level,
+                                                    link: hit.stepsheet ?? l.link,
+                                                })}
+                                            />
                                         </div>
+                                        <Field label="Level">
+                                            <input value={l.level} onChange={(e) => updateLesson(l.id, { level: e.target.value })}
+                                                placeholder="Absolute Beginner" style={inputStyle} />
+                                        </Field>
+                                        <Field label="Link">
+                                            <input value={l.link} onChange={(e) => updateLesson(l.id, { link: e.target.value })}
+                                                placeholder="Stepsheet URL" style={inputStyle} />
+                                        </Field>
                                     </div>
-                                ))}
-                                <div>
-                                    <ActionButton label="+ Add lesson" variant="ghost" onClick={addLessonDraft} />
                                 </div>
-                                {lessonSaveErr && <p style={{ fontSize: 13, color: "var(--danger)" }}>{lessonSaveErr}</p>}
-                                <div style={{ display: "flex", gap: 8 }}>
-                                    <ActionButton label={savingLessons ? "Saving…" : "Save lessons"} loading={savingLessons} onClick={saveLessons} />
-                                    <ActionButton label="Cancel" variant="ghost" onClick={() => setEditingLessons(false)} />
-                                </div>
-                            </div>
-                        ) : (
-                            /* Read-only lesson list */
-                            ev.lessons.length === 0 ? (
-                                <p style={{ fontSize: 13, color: "var(--text-tertiary)", textAlign: "center", padding: "16px 0" }}>
-                                    No lessons planned.{" "}
-                                    <button onClick={startEditLessons} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent-text)", textDecoration: "underline", fontSize: 13 }}>
-                                        Add now
-                                    </button>
-                                </p>
-                            ) : (
-                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                    {ev.lessons.map((l, i) => (
-                                        <div key={i} style={{
-                                            display: "flex", alignItems: "center", gap: 12,
-                                            padding: "10px 12px", borderRadius: 8,
-                                            background: l.committed ? "var(--success-subtle)" : "var(--surface-raised)",
-                                            border: `1px solid ${l.committed ? "rgba(16,185,129,0.2)" : "var(--border)"}`,
-                                        }}>
-                                            <div style={{ minWidth: 60, fontSize: 12, color: "var(--text-tertiary)" }}>{l.time ?? "—"}</div>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
-                                                    {l.link ? (
-                                                        <a href={l.link} target="_blank" rel="noreferrer" style={{ color: "var(--accent-text)", textDecoration: "underline" }}>
-                                                            {l.dance ?? "Untitled dance"}
-                                                        </a>
-                                                    ) : (l.dance ?? "Untitled dance")}
-                                                </div>
-                                                {l.level && <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{l.level}</div>}
-                                            </div>
-                                            {l.committed ? (
-                                                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--success-text)", background: "var(--success-subtle)", padding: "3px 8px", borderRadius: 20 }}>
-                                                    ✓ Committed
-                                                </span>
-                                            ) : (
-                                                <button onClick={() => commitLesson(i)} disabled={committing !== null}
-                                                    style={{ fontSize: 12, fontWeight: 600, color: "var(--accent-text)", background: "var(--accent-subtle)", border: "none", cursor: committing !== null ? "wait" : "pointer", padding: "4px 10px", borderRadius: 20 }}>
-                                                    {committing === i ? "…" : "Commit"}
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )
-                        )}
+                            ))}
+                        </div>
+
+                        <div style={{ marginTop: draft.lessons.length > 0 ? 12 : 0 }}>
+                            <ActionButton label="+ Add lesson" variant="ghost" onClick={addLesson} />
+                        </div>
                     </div>
                 )}
 
+                {/* Save */}
+                {saveErr && <p style={{ fontSize: 13, color: "var(--danger)" }}>{saveErr}</p>}
+                {saved && !saveErr && (
+                    <p style={{ fontSize: 13, color: "var(--success-text)", fontWeight: 600 }}>✓ Saved</p>
+                )}
                 <div style={{ display: "flex", gap: 8 }}>
+                    <ActionButton label={saving ? "Saving…" : "Save"} loading={saving} onClick={save} />
                     <ActionButton label="Back" variant="ghost" onClick={() => router.back()} />
                 </div>
             </div>

@@ -11,15 +11,16 @@ interface EventRow { _id: string; eventTypeId: string; date: string; startTime: 
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function todayYmd() {
-    return new Date().toISOString().slice(0, 10);
+function yesterdayYmd() {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
 }
 function daysAgoYmd(n: number) {
     const d = new Date();
     d.setDate(d.getDate() - n);
     return d.toISOString().slice(0, 10);
 }
-
 function formatDate(ymd: string) {
     const [y, m, d] = ymd.split("-").map(Number);
     return new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -27,21 +28,21 @@ function formatDate(ymd: string) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-function CommitLessonsInner() {
+function MarkTaughtInner() {
     const [from, setFrom] = useState(daysAgoYmd(7));
-    const [to, setTo] = useState(todayYmd());
+    const [to, setTo] = useState(yesterdayYmd);
 
     const [rows, setRows] = useState<EventRow[] | null>(null);
     const [loading, setLoading] = useState(false);
     const [loadErr, setLoadErr] = useState<string | null>(null);
-    const [committing, setCommitting] = useState<string | null>(null);
-    const [committed, setCommitted] = useState<Set<string>>(new Set());
+    const [marking, setMarking] = useState<string | null>(null);
+    const [markedTaught, setMarkedTaught] = useState<Set<string>>(new Set());
 
     async function load() {
         setLoading(true);
         setLoadErr(null);
         setRows(null);
-        setCommitted(new Set());
+        setMarkedTaught(new Set());
         try {
             const data = await fetch(`/api/admin/bld/commit-lessons?from=${from}&to=${to}`).then((r) => r.json());
             if (data.error) throw new Error(data.error);
@@ -53,8 +54,8 @@ function CommitLessonsInner() {
         }
     }
 
-    async function commitEvent(eventId: string) {
-        setCommitting(eventId);
+    async function markTaught(eventId: string) {
+        setMarking(eventId);
         try {
             const res = await fetch("/api/admin/bld/commit-lessons", {
                 method: "POST",
@@ -63,23 +64,24 @@ function CommitLessonsInner() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error ?? "Failed");
-            setCommitted((prev) => new Set([...prev, eventId]));
+            setMarkedTaught((prev) => new Set([...prev, eventId]));
         } catch (e: unknown) {
             alert(e instanceof Error ? e.message : String(e));
         } finally {
-            setCommitting(null);
+            setMarking(null);
         }
     }
 
-    const pendingRows = rows?.filter((r) => !committed.has(r._id)) ?? [];
-    const doneRows = rows?.filter((r) => committed.has(r._id)) ?? [];
+    const pendingRows = rows?.filter((r) => !markedTaught.has(r._id)) ?? [];
+    const doneRows = rows?.filter((r) => markedTaught.has(r._id)) ?? [];
 
     return (
         <div style={{ padding: "32px 36px", maxWidth: 760 }}>
             <div style={{ marginBottom: 24 }}>
-                <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>Commit Lessons</h1>
+                <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>Mark as Taught</h1>
                 <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
-                    Mark lessons as taught. Shows events in the date range that still have uncommitted lessons.
+                    Shows past events that have lessons not yet marked as taught. Open an event to mark individual lessons,
+                    or use "Mark all taught" to bulk-mark everything.
                 </p>
             </div>
 
@@ -106,18 +108,17 @@ function CommitLessonsInner() {
                 <>
                     {pendingRows.length === 0 && doneRows.length === 0 && (
                         <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-tertiary)", fontSize: 14 }}>
-                            No events with uncommitted lessons in this range.
+                            No events with untaught lessons in this range.
                         </div>
                     )}
 
                     {pendingRows.length > 0 && (
                         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                             {pendingRows.map((ev) => {
-                                const uncommitted = ev.lessons.filter((l) => !l.committed);
-                                const isCommitting = committing === ev._id;
+                                const untaught = ev.lessons.filter((l) => !l.committed);
+                                const isMarking = marking === ev._id;
                                 return (
                                     <div key={ev._id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
-                                        {/* Event header */}
                                         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                             <div>
                                                 <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
@@ -130,13 +131,13 @@ function CommitLessonsInner() {
                                             </div>
                                             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                                 <span style={{ fontSize: 11, color: "var(--warning-text)", background: "var(--warning-subtle)", padding: "3px 8px", borderRadius: 20, fontWeight: 600 }}>
-                                                    {uncommitted.length} pending
+                                                    {untaught.length} not taught
                                                 </span>
                                                 <ActionButton
-                                                    label={isCommitting ? "Committing…" : "Commit all"}
-                                                    loading={isCommitting}
+                                                    label={isMarking ? "Marking…" : "Mark all taught"}
+                                                    loading={isMarking}
                                                     variant="success"
-                                                    onClick={() => commitEvent(ev._id)}
+                                                    onClick={() => markTaught(ev._id)}
                                                 />
                                                 <Link href={`/events/${ev._id}`} style={{ fontSize: 12, color: "var(--accent-text)", textDecoration: "underline" }}>
                                                     Open ↗
@@ -144,7 +145,6 @@ function CommitLessonsInner() {
                                             </div>
                                         </div>
 
-                                        {/* Lessons */}
                                         <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
                                             {ev.lessons.map((l, i) => (
                                                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 6, background: l.committed ? "var(--success-subtle)" : "var(--surface-raised)", opacity: l.committed ? 0.7 : 1 }}>
@@ -160,9 +160,9 @@ function CommitLessonsInner() {
                                                         {l.level && <span style={{ fontSize: 11, color: "var(--text-tertiary)", marginLeft: 8 }}>{l.level}</span>}
                                                     </div>
                                                     {l.committed ? (
-                                                        <span style={{ fontSize: 11, color: "var(--success-text)", fontWeight: 600 }}>✓</span>
+                                                        <span style={{ fontSize: 11, color: "var(--success-text)", fontWeight: 600 }}>✓ taught</span>
                                                     ) : (
-                                                        <span style={{ fontSize: 11, color: "var(--warning-text)" }}>pending</span>
+                                                        <span style={{ fontSize: 11, color: "var(--warning-text)" }}>not taught</span>
                                                     )}
                                                 </div>
                                             ))}
@@ -176,7 +176,7 @@ function CommitLessonsInner() {
                     {doneRows.length > 0 && (
                         <div style={{ marginTop: 20 }}>
                             <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
-                                Committed this session ({doneRows.length})
+                                Marked taught this session ({doneRows.length})
                             </p>
                             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                                 {doneRows.map((ev) => (
@@ -184,7 +184,7 @@ function CommitLessonsInner() {
                                         <span style={{ fontSize: 22, color: "var(--success)" }}>✓</span>
                                         <div style={{ flex: 1 }}>
                                             <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{ev.eventType?.title ?? ev.eventTypeId}</p>
-                                            <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{formatDate(ev.date)} · {ev.lessons.length} lesson{ev.lessons.length !== 1 ? "s" : ""} committed</p>
+                                            <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{formatDate(ev.date)} · {ev.lessons.length} lesson{ev.lessons.length !== 1 ? "s" : ""} marked taught</p>
                                         </div>
                                         <Link href={`/events/${ev._id}`} style={{ fontSize: 12, color: "var(--accent-text)", textDecoration: "underline" }}>Open ↗</Link>
                                     </div>
@@ -201,7 +201,7 @@ function CommitLessonsInner() {
 export default function CommitLessonsPage() {
     return (
         <Suspense>
-            <CommitLessonsInner />
+            <MarkTaughtInner />
         </Suspense>
     );
 }

@@ -4,11 +4,12 @@ import { useState, type ReactNode } from "react";
 
 // ── PageShell ────────────────────────────────────────────────────────────────
 
-export function PageShell({ title, count, loading, children }: {
+export function PageShell({ title, count, loading, children, actions }: {
     title: string;
     count: number;
     loading: boolean;
     children: ReactNode;
+    actions?: ReactNode;
 }) {
     return (
         <div style={{ padding: "32px 36px", maxWidth: 800 }}>
@@ -27,6 +28,7 @@ export function PageShell({ title, count, loading, children }: {
                             {count}
                         </span>
                     )}
+                    {actions && <div style={{ marginLeft: "auto" }}>{actions}</div>}
                 </div>
                 {loading && (
                     <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 4 }}>Loading…</p>

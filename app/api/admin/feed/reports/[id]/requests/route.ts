@@ -31,11 +31,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         clientId: h.clientId ?? null,
         requesterName: h.requesterName ?? null,
         requests: (Array.isArray(h.requests) ? h.requests : []).map((r: {
-            danceName?: string; danceId?: string; status?: string;
+            danceName?: string; danceId?: string; danceType?: string; status?: string;
             tipCents?: number; createdAt?: Date;
         }) => ({
             danceName: r.danceName ?? null,
             danceId: r.danceId ?? null,
+            danceType: r.danceType ?? null,
             status: r.status ?? null,
             tipCents: r.tipCents ?? 0,
             createdAt: r.createdAt ?? null,

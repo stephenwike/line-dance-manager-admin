@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 
 const NAV = [
     { href: "/dashboard", label: "Dashboard", icon: "⊞", section: null },
+    { href: "/registrations/intermediate-social", label: "Int LD Social", icon: "🎟️", section: "Special Events" },
+    { href: "/registrations/intermediate-social/tally", label: "Request Tally", icon: "📊", section: null },
     { href: "/dances", label: "Dances", icon: "♪", section: null },
     { href: "/instructor-claims", label: "Instructor Claims", icon: "👤", section: null },
     { href: "/venue-claims", label: "Venue Claims", icon: "🏠", section: null },
@@ -17,8 +19,10 @@ const NAV = [
     { href: "/event-types", label: "Event Types", icon: "📅", section: null },
     { href: "/frequencies", label: "Frequencies", icon: "🔁", section: null },
     { href: "/generate-events", label: "Generate Events", icon: "⚡", section: null },
+    { href: "/add-event", label: "Add Special Event", icon: "✦", section: null },
     { href: "/lesson-overview", label: "Lesson Overview", icon: "📋", section: null },
-    { href: "/commit-lessons", label: "Commit Lessons", icon: "✅", section: null },
+    { href: "/add-taught-lesson", label: "Add Taught Lesson", icon: "✏️", section: null },
+    { href: "/commit-lessons", label: "Mark as Taught", icon: "✅", section: null },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

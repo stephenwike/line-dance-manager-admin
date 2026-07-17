@@ -81,7 +81,23 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 interface Requester {
     clientId: string | null;
     requesterName: string | null;
-    requests: { danceName: string | null; danceId: string | null; status: string | null; tipCents: number; createdAt: string | null }[];
+    requests: { danceName: string | null; danceId: string | null; danceType: string | null; status: string | null; tipCents: number; createdAt: string | null }[];
+}
+
+function DanceTypeBadge({ type }: { type: string | null }) {
+    if (!type) return null;
+    const isPartner = type.toLowerCase().includes("partner");
+    return (
+        <span style={{
+            display: "inline-block",
+            fontSize: 10, fontWeight: 700, flexShrink: 0,
+            padding: "1px 6px", borderRadius: 4,
+            background: isPartner ? "rgba(245,158,11,0.15)" : "rgba(79,70,229,0.1)",
+            color: isPartner ? "#b45309" : "var(--accent-text)",
+        }}>
+            {isPartner ? "Partner" : "Line"}
+        </span>
+    );
 }
 
 function AllRequests({ requesters }: { requesters: Requester[] }) {
@@ -129,10 +145,11 @@ function AllRequests({ requesters }: { requesters: Requester[] }) {
                                     {req.requests.map((r, ri) => {
                                         const sc = STATUS_CONFIG[r.status ?? ""] ?? { label: r.status ?? "?", color: "var(--text-tertiary)" };
                                         return (
-                                            <div key={ri} style={{ display: "grid", gridTemplateColumns: "1fr 80px 70px 70px", gap: 8, alignItems: "center" }}>
+                                            <div key={ri} style={{ display: "grid", gridTemplateColumns: "1fr auto 80px 70px 70px", gap: 8, alignItems: "center" }}>
                                                 <span style={{ fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                                     {r.danceName ?? "Custom request"}
                                                 </span>
+                                                <DanceTypeBadge type={r.danceType} />
                                                 <span style={{ fontSize: 11, fontWeight: 600, color: sc.color }}>
                                                     {sc.label}
                                                 </span>
@@ -158,6 +175,7 @@ function AllRequests({ requesters }: { requesters: Requester[] }) {
 interface DanceGroup {
     danceName: string | null;
     danceId: string | null;
+    danceType: string | null;
     count: number;
     played: number;
     skipped: number;
@@ -173,7 +191,7 @@ function ByDance({ requesters }: { requesters: Requester[] }) {
         for (const r of req.requests) {
             const key = r.danceId ?? r.danceName ?? "__custom__";
             if (!danceMap.has(key)) {
-                danceMap.set(key, { danceName: r.danceName, danceId: r.danceId, count: 0, played: 0, skipped: 0, totalTipCents: 0, requesters: [] });
+                danceMap.set(key, { danceName: r.danceName, danceId: r.danceId, danceType: r.danceType, count: 0, played: 0, skipped: 0, totalTipCents: 0, requesters: [] });
             }
             const g = danceMap.get(key)!;
             g.count++;
@@ -205,9 +223,12 @@ function ByDance({ requesters }: { requesters: Requester[] }) {
                                 <span style={{ fontSize: 18, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>
                                     {dance.count}
                                 </span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {dance.danceName ?? "Custom request"}
-                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {dance.danceName ?? "Custom request"}
+                                    </span>
+                                    <DanceTypeBadge type={dance.danceType} />
+                                </div>
                                 <span style={{ fontSize: 11, color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>
                                     {dance.played > 0 && <span style={{ color: "#059669", fontWeight: 600, marginRight: 6 }}>{dance.played} played</span>}
                                     {dance.skipped > 0 && <span style={{ color: "#6b7280", marginRight: 6 }}>{dance.skipped} skipped</span>}
@@ -302,8 +323,11 @@ function Playlist({ reportId }: { reportId: string }) {
                                 </span>
 
                                 <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                        {track.danceName ?? "Unknown"}
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                            {track.danceName ?? "Unknown"}
+                                        </span>
+                                        <DanceTypeBadge type={track.danceType} />
                                     </div>
                                     {songLine && (
                                         <div style={{ fontSize: 11, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -362,9 +386,6 @@ function Playlist({ reportId }: { reportId: string }) {
                                         ))
                                     ) : (
                                         <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>No requester info.</p>
-                                    )}
-                                    {track.danceType === "partner" && (
-                                        <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>Partner dance</p>
                                     )}
                                     {track.stepsheet && (
                                         <a href={track.stepsheet} target="_blank" rel="noopener noreferrer"
