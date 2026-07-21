@@ -91,7 +91,7 @@ export default function IntermediateSocialRegistrations() {
     ];
 
     return (
-        <div className="page-pad" style={{ maxWidth: 800 }}>
+        <div className="page-pad">
             {/* Header */}
             <div style={{ marginBottom: 24 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>
