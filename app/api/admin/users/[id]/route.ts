@@ -8,7 +8,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
     const { id } = await params;
     const db = await getMainDb();
-    const result = await db.collection("users").deleteOne({ _id: id });
+    const result = await db.collection<{ _id: string }>("users").deleteOne({ _id: id });
 
     if (result.deletedCount === 0) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
