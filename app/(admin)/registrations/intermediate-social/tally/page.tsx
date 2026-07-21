@@ -46,7 +46,7 @@ export default function RequestTallyPage() {
     const maxCount = data?.dances[0]?.count ?? 1;
 
     return (
-        <div style={{ padding: "32px 36px" }}>
+        <div className="page-pad">
             <div style={{ marginBottom: 24 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>
                     Dance Request Tally

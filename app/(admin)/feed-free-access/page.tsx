@@ -78,7 +78,7 @@ function AddForm({ onAdded }: { onAdded: (entry: Entry) => void }) {
     return (
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
             <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Grant free access</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+            <div className="grid-3" style={{ gap: 10 }}>
                 <Field label="Email">
                     <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" style={inputStyle}
                         onKeyDown={(e) => e.key === "Enter" && submit()} />
@@ -142,7 +142,7 @@ export default function FeedFreeAccessPage() {
     const expiredCount = entries.filter((e) => !isActive(e)).length;
 
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 800 }}>
+        <div className="page-pad" style={{ maxWidth: 800 }}>
             <div style={{ marginBottom: 24 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>Free Access</h1>
                 <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>

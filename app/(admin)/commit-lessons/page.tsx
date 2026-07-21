@@ -76,7 +76,7 @@ function MarkTaughtInner() {
     const doneRows = rows?.filter((r) => markedTaught.has(r._id)) ?? [];
 
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 760 }}>
+        <div className="page-pad" style={{ maxWidth: 760 }}>
             <div style={{ marginBottom: 24 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>Mark as Taught</h1>
                 <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
@@ -87,7 +87,7 @@ function MarkTaughtInner() {
 
             {/* Date range filter */}
             <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, alignItems: "flex-end" }}>
+                <div className="grid-2-auto" style={{ gap: 10, alignItems: "flex-end" }}>
                     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>From</span>
                         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}

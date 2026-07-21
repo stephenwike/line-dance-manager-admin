@@ -12,7 +12,7 @@ export function PageShell({ title, count, loading, children, actions }: {
     actions?: ReactNode;
 }) {
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 800 }}>
+        <div className="page-pad" style={{ maxWidth: 800 }}>
             <div style={{ marginBottom: 24 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>{title}</h1>

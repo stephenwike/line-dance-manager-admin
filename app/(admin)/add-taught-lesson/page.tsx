@@ -177,7 +177,7 @@ export default function AddTaughtLessonPage() {
     const selectedVenueName = venues.find((v) => v._id === venueId)?.name ?? "";
 
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 680 }}>
+        <div className="page-pad" style={{ maxWidth: 680 }}>
             <div style={{ marginBottom: 24 }}>
                 <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--text-secondary)", padding: 0, textDecoration: "underline", marginBottom: 10, display: "block" }}>← Back</button>
                 <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>Add taught lesson</h1>
@@ -216,7 +216,7 @@ export default function AddTaughtLessonPage() {
                     </Field>
 
                     {/* Date + Time */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div className="grid-2" style={{ gap: 10 }}>
                         <Field label="Date">
                             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={saving} style={inputStyle} />
                         </Field>

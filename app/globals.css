@@ -3,6 +3,9 @@
 :root {
     /* Layout */
     --sidebar-width: 220px;
+    --topbar-height: 56px;
+    --page-pad-x: 36px;
+    --page-pad-y: 32px;
 
     /* Backgrounds */
     --bg: #f1f5f9;
@@ -74,4 +77,142 @@ body {
 ::-webkit-scrollbar-thumb {
     background: var(--border-strong);
     border-radius: 3px;
+}
+
+/* ─── Admin layout ───────────────────────────────────────────── */
+
+.admin-sidebar {
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 200;
+    transition: transform 0.25s ease;
+}
+
+.admin-topbar {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--topbar-height);
+    background: var(--sidebar-bg);
+    z-index: 199;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+    border-bottom: 1px solid var(--sidebar-border);
+}
+
+.admin-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 198;
+}
+
+.admin-main {
+    margin-left: var(--sidebar-width);
+    min-height: 100vh;
+    background: var(--bg);
+}
+
+/* ─── Responsive utilities ───────────────────────────────────── */
+
+/* Page padding — swap in for inline padding on root page divs */
+.page-pad {
+    padding: var(--page-pad-y) var(--page-pad-x);
+}
+
+/* Two-column grid → single column on mobile */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* Three-column grid → single column on mobile */
+.grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+}
+
+/* Lesson editor row: time | dance | level | link */
+.lesson-grid {
+    display: grid;
+    grid-template-columns: 120px 1fr 1fr 1fr;
+    gap: 8px;
+}
+
+/* Two-column + fixed-width action column (e.g. "1fr 1fr auto") */
+.grid-2-auto {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 10px;
+}
+
+/* Horizontal scroll wrapper for tables and wide content */
+.table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ─── Mobile breakpoint (≤ 768 px) ──────────────────────────── */
+
+@media (max-width: 768px) {
+    :root {
+        --page-pad-x: 16px;
+        --page-pad-y: 20px;
+    }
+
+    .admin-sidebar {
+        transform: translateX(-100%);
+        width: 260px;
+        z-index: 200;
+    }
+
+    .admin-sidebar.open {
+        transform: translateX(0);
+    }
+
+    .admin-topbar {
+        display: flex;
+    }
+
+    .admin-overlay.open {
+        display: block;
+    }
+
+    .admin-main {
+        margin-left: 0;
+        padding-top: var(--topbar-height);
+    }
+
+    .grid-2 {
+        grid-template-columns: 1fr;
+    }
+
+    .grid-3 {
+        grid-template-columns: 1fr;
+    }
+
+    .grid-2-auto {
+        grid-template-columns: 1fr;
+    }
+
+    .lesson-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-pad {
+        padding: var(--page-pad-y) var(--page-pad-x);
+    }
 }

@@ -215,7 +215,7 @@ function PlanLessonInner() {
     const venueLine = venue ? [venue.name, venue.address, venue.city, venue.state].filter(Boolean).join(", ") : null;
 
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 760 }}>
+        <div className="page-pad" style={{ maxWidth: 760 }}>
             <div style={{ marginBottom: 24 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>Plan Lesson</h1>
                 <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
@@ -242,7 +242,7 @@ function PlanLessonInner() {
                 {/* Date & time */}
                 <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
                     <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Date: <strong style={{ color: "var(--text-primary)" }}>{date}</strong></p>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div className="grid-2" style={{ gap: 10 }}>
                         <Field label="Start time">
                             <input value={startTime} onChange={(e) => setStartTime(e.target.value)} placeholder="6:00 PM" style={inputStyle} />
                         </Field>
@@ -299,7 +299,7 @@ function PlanLessonInner() {
                                         </button>
                                     )}
                                 </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr 1fr", gap: 8 }}>
+                                <div className="lesson-grid">
                                     <Field label="Time">
                                         <input value={l.time} onChange={(e) => updateLesson(l.id, { time: e.target.value })} placeholder="6:45 PM" style={inputStyle} />
                                     </Field>

@@ -95,7 +95,7 @@ export default function LessonOverviewPage() {
     }), [rows, showCancelled, etFilter]);
 
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 860 }}>
+        <div className="page-pad" style={{ maxWidth: 860 }}>
             <div style={{ marginBottom: 24 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>Lesson Overview</h1>
                 <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>

@@ -167,7 +167,7 @@ export default function AddEventPage() {
     }
 
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 680 }}>
+        <div className="page-pad" style={{ maxWidth: 680 }}>
             <div style={{ marginBottom: 24 }}>
                 <button onClick={() => router.back()} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--text-secondary)", padding: 0, textDecoration: "underline", marginBottom: 10, display: "block" }}>← Back</button>
                 <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>Add special event</h1>
@@ -223,7 +223,7 @@ export default function AddEventPage() {
                                         {venues.map((v) => <option key={v._id} value={v._id}>{venueLabel(v)}</option>)}
                                     </select>
                                 </Field>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                                <div className="grid-2" style={{ gap: 10 }}>
                                     <Field label="Level (optional)">
                                         <input value={newLevel} onChange={(e) => setNewLevel(e.target.value)} placeholder="e.g. All levels" style={inputStyle} />
                                     </Field>
@@ -241,7 +241,7 @@ export default function AddEventPage() {
                     {/* Occurrence */}
                     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px", display: "flex", flexDirection: "column", gap: 12 }}>
                         <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>When</p>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                        <div className="grid-3" style={{ gap: 10 }}>
                             <Field label="Date">
                                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
                             </Field>

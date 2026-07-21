@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 type AttendeeStatus = "registered" | "approved" | "waitlisted" | "removed";
 type Tab = "registered" | "guestlist" | "waitlist";
@@ -90,7 +91,7 @@ export default function IntermediateSocialRegistrations() {
     ];
 
     return (
-        <div style={{ padding: "32px 36px" }}>
+        <div className="page-pad" style={{ maxWidth: 800 }}>
             {/* Header */}
             <div style={{ marginBottom: 24 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>
@@ -107,7 +108,7 @@ export default function IntermediateSocialRegistrations() {
             {!loading && !error && (
                 <>
                     {/* Summary row */}
-                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 24 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12, marginBottom: 24 }}>
                         <StatCard label="Total" value={registrations.filter(r => r.attendeeStatus !== "removed").length} />
                         <StatCard label="Guestlist" value={guestlist.length} color="var(--success-text)" bg="var(--success-subtle)" />
                         <StatCard label="Waitlist" value={waitlist.length} color="var(--warning-text)" bg="var(--warning-subtle)" />
@@ -161,7 +162,38 @@ export default function IntermediateSocialRegistrations() {
                         <RegistrationTable
                             rows={registered}
                             pending={pending}
-                            actions={(r) => (
+                            actions={(r, mobile) => mobile ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                                        <ActionButton
+                                            label="Approve"
+                                            loading={pending[r._id] === "approved"}
+                                            onClick={() => setStatus(r._id, "approved")}
+                                            style={{ color: "var(--success-text)", border: "1.5px solid rgba(16,185,129,0.35)", background: "var(--success-subtle)", padding: "10px 0" }}
+                                        />
+                                        <ActionButton
+                                            label="Waitlist"
+                                            loading={pending[r._id] === "waitlisted"}
+                                            onClick={() => setStatus(r._id, "waitlisted")}
+                                            style={{ color: "var(--text-secondary)", border: "1px solid var(--border)", background: "transparent", padding: "10px 0" }}
+                                        />
+                                    </div>
+                                    {r.paymentMethod === "venmo" && r.paymentStatus === "pending" && (
+                                        <ActionButton
+                                            label="Mark Paid"
+                                            loading={pending[r._id] === "paid"}
+                                            onClick={() => markPaid(r._id)}
+                                            style={{ color: "var(--warning-text)", border: "1.5px solid rgba(245,158,11,0.4)", background: "var(--warning-subtle)", width: "100%", padding: "10px 0" }}
+                                        />
+                                    )}
+                                    <ActionButton
+                                        label="Remove"
+                                        loading={pending[r._id] === "removed"}
+                                        onClick={() => setStatus(r._id, "removed")}
+                                        style={{ color: "var(--danger-text)", border: "1.5px solid rgba(239,68,68,0.3)", background: "var(--danger-subtle)", width: "100%", padding: "10px 0" }}
+                                    />
+                                </div>
+                            ) : (
                                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
                                     {r.paymentMethod === "venmo" && r.paymentStatus === "pending" && (
                                         <ActionButton
@@ -183,6 +215,12 @@ export default function IntermediateSocialRegistrations() {
                                         onClick={() => setStatus(r._id, "waitlisted")}
                                         style={{ color: "var(--text-secondary)", border: "1px solid var(--border)", background: "transparent" }}
                                     />
+                                    <ActionButton
+                                        label="Remove"
+                                        loading={pending[r._id] === "removed"}
+                                        onClick={() => setStatus(r._id, "removed")}
+                                        style={{ color: "var(--danger-text)", border: "1.5px solid rgba(239,68,68,0.3)", background: "var(--danger-subtle)" }}
+                                    />
                                 </div>
                             )}
                         />
@@ -192,12 +230,12 @@ export default function IntermediateSocialRegistrations() {
                         <RegistrationTable
                             rows={guestlist}
                             pending={pending}
-                            actions={(r) => (
+                            actions={(r, mobile) => (
                                 <ActionButton
                                     label="Remove"
                                     loading={pending[r._id] === "removed"}
                                     onClick={() => setStatus(r._id, "removed")}
-                                    style={{ color: "var(--danger-text)", border: "1.5px solid rgba(239,68,68,0.3)", background: "var(--danger-subtle)" }}
+                                    style={{ color: "var(--danger-text)", border: "1.5px solid rgba(239,68,68,0.3)", background: "var(--danger-subtle)", ...(mobile ? { width: "100%", padding: "10px 0" } : {}) }}
                                 />
                             )}
                             emptyMessage="No one on the guestlist yet. Approve registrations to add them."
@@ -208,12 +246,12 @@ export default function IntermediateSocialRegistrations() {
                         <RegistrationTable
                             rows={waitlist}
                             pending={pending}
-                            actions={(r) => (
+                            actions={(r, mobile) => (
                                 <ActionButton
                                     label="Approve"
                                     loading={pending[r._id] === "approved"}
                                     onClick={() => setStatus(r._id, "approved")}
-                                    style={{ color: "var(--success-text)", border: "1.5px solid rgba(16,185,129,0.35)", background: "var(--success-subtle)" }}
+                                    style={{ color: "var(--success-text)", border: "1.5px solid rgba(16,185,129,0.35)", background: "var(--success-subtle)", ...(mobile ? { width: "100%", padding: "10px 0" } : {}) }}
                                 />
                             )}
                             emptyMessage="No one on the waitlist."
@@ -233,42 +271,129 @@ function RegistrationTable({
 }: {
     rows: Registration[];
     pending: Record<string, string>;
-    actions: (r: Registration) => React.ReactNode;
+    actions: (r: Registration, isMobile: boolean) => React.ReactNode;
     emptyMessage?: string;
 }) {
+    const isMobile = useIsMobile();
+
+    if (rows.length === 0) {
+        return (
+            <p style={{ color: "var(--text-tertiary)", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
+                {emptyMessage}
+            </p>
+        );
+    }
+
+    if (isMobile) {
+        return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {rows.map((r) => (
+                    <div key={r._id} style={{
+                        background: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 10,
+                        padding: "14px 16px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                        opacity: pending[r._id] ? 0.6 : 1,
+                        transition: "opacity 0.15s",
+                    }}>
+                        {/* Name + payment */}
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</p>
+                                {r.address && <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.address}</p>}
+                            </div>
+                            <div style={{ flexShrink: 0 }}>
+                                <PaymentCell reg={r} />
+                            </div>
+                        </div>
+
+                        {/* Contact */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <a href={`mailto:${r.email}`} style={{ fontSize: 13, color: "var(--accent-text)", textDecoration: "none" }}>
+                                {r.email}
+                            </a>
+                            {r.phone && <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{r.phone}</span>}
+                        </div>
+
+                        {/* Waiver */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {r.agreedToWaiver ? (
+                                <>
+                                    <Badge text="Waiver signed" color="#15803d" bg="rgba(34,197,94,0.12)" />
+                                    {r.waiverSignature && (
+                                        <span style={{ fontSize: 11, color: "var(--text-secondary)", fontStyle: "italic" }}>
+                                            "{r.waiverSignature}"
+                                        </span>
+                                    )}
+                                </>
+                            ) : (
+                                <Badge text="Waiver not signed" color="var(--danger-text)" bg="var(--danger-subtle)" />
+                            )}
+                        </div>
+
+                        {/* Requests */}
+                        {r.requests.length > 0 && (
+                            <div>
+                                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>
+                                    Requests
+                                </p>
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                    {r.requests.map((req, i) => (
+                                        <span key={i} style={{
+                                            fontSize: 11, color: "var(--text-secondary)",
+                                            background: "var(--surface-raised)",
+                                            border: "1px solid var(--border)",
+                                            borderRadius: 4, padding: "2px 6px",
+                                        }}>
+                                            {req.text}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Registered date */}
+                        {r.createdAt && (
+                            <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+                                Registered {new Date(r.createdAt).toLocaleDateString()} at {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                        )}
+
+                        {/* Actions */}
+                        <div style={{ paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                            {actions(r, true)}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
     return (
         <div style={{
             background: "var(--surface)",
             border: "1px solid var(--border)",
             borderRadius: 10,
-            overflow: "auto",
+            overflow: "hidden",
         }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 700 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                     <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-raised)" }}>
                         {["Name", "Email", "Phone", "Waiver", "Payment", "Requests", "Registered"].map(h => (
                             <th key={h} style={{
-                                textAlign: "left",
-                                padding: "10px 14px",
-                                fontSize: 11,
-                                fontWeight: 700,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.06em",
-                                color: "var(--text-secondary)",
-                                whiteSpace: "nowrap",
+                                textAlign: "left", padding: "10px 14px",
+                                fontSize: 11, fontWeight: 700,
+                                textTransform: "uppercase", letterSpacing: "0.06em",
+                                color: "var(--text-secondary)", whiteSpace: "nowrap",
                             }}>{h}</th>
                         ))}
                         <th style={{ width: 160 }} />
                     </tr>
                 </thead>
                 <tbody>
-                    {rows.length === 0 && (
-                        <tr>
-                            <td colSpan={8} style={{ padding: "32px 14px", textAlign: "center", color: "var(--text-tertiary)" }}>
-                                {emptyMessage}
-                            </td>
-                        </tr>
-                    )}
                     {rows.map((r, i) => (
                         <tr key={r._id} style={{
                             borderBottom: i < rows.length - 1 ? "1px solid var(--border)" : "none",
@@ -277,9 +402,7 @@ function RegistrationTable({
                         }}>
                             <td style={{ padding: "12px 14px", fontWeight: 500, color: "var(--text-primary)" }}>
                                 {r.name}
-                                {r.address && (
-                                    <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>{r.address}</div>
-                                )}
+                                {r.address && <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>{r.address}</div>}
                             </td>
                             <td style={{ padding: "12px 14px" }}>
                                 <a href={`mailto:${r.email}`} style={{ color: "var(--accent-text)", textDecoration: "none", fontSize: 13 }}>
@@ -303,9 +426,7 @@ function RegistrationTable({
                                     <Badge text="Not signed" color="var(--danger-text)" bg="var(--danger-subtle)" />
                                 )}
                             </td>
-                            <td style={{ padding: "12px 14px" }}>
-                                <PaymentCell reg={r} />
-                            </td>
+                            <td style={{ padding: "12px 14px" }}><PaymentCell reg={r} /></td>
                             <td style={{ padding: "12px 14px", verticalAlign: "top" }}>
                                 {r.requests.length === 0 ? (
                                     <span style={{ opacity: 0.35, fontSize: 13 }}>—</span>
@@ -329,9 +450,7 @@ function RegistrationTable({
                                     </>
                                 ) : "—"}
                             </td>
-                            <td style={{ padding: "12px 14px", textAlign: "right" }}>
-                                {actions(r)}
-                            </td>
+                            <td style={{ padding: "12px 14px", textAlign: "right" }}>{actions(r, false)}</td>
                         </tr>
                     ))}
                 </tbody>

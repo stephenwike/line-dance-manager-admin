@@ -483,7 +483,7 @@ export default function DashboardPage() {
     }, []);
 
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 760 }}>
+        <div className="page-pad" style={{ maxWidth: 760 }}>
             {/* Greeting */}
             <div style={{ marginBottom: 36 }}>
                 <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>{greeting()}</h1>

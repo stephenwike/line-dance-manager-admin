@@ -97,7 +97,7 @@ function EventTypeForm({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div className="grid-2" style={{ gap: 8 }}>
                 <Field label="Title *">
                     <input value={f.title} onChange={(e) => set({ title: e.target.value })} placeholder="Charlie's Country Night" style={inputStyle} />
                 </Field>
@@ -108,7 +108,7 @@ function EventTypeForm({
                     </select>
                 </Field>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div className="grid-2" style={{ gap: 8 }}>
                 <Field label="Level">
                     <input value={f.level} onChange={(e) => set({ level: e.target.value })} placeholder="All Levels" style={inputStyle} />
                 </Field>
@@ -116,7 +116,7 @@ function EventTypeForm({
                     <input value={f.price} onChange={(e) => set({ price: e.target.value })} placeholder="FREE" style={inputStyle} />
                 </Field>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "end" }}>
+            <div className="grid-2-auto" style={{ gap: 8, alignItems: "end" }}>
                 <Field label="Default start time">
                     <input value={f.defaultStartTime} onChange={(e) => set({ defaultStartTime: e.target.value })} placeholder="5:00 PM" style={inputStyle} />
                 </Field>

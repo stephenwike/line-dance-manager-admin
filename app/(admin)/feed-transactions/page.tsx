@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/ui";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 type TxType = "purchase" | "beat_tip" | "direct_tip";
 
@@ -125,6 +126,7 @@ export default function FeedTransactionsPage() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<"" | TxType>("");
     const [filterHovered, setFilterHovered] = useState<string | null>(null);
+    const isMobile = useIsMobile();
 
     async function load(type: "" | TxType) {
         setLoading(true);
@@ -148,7 +150,7 @@ export default function FeedTransactionsPage() {
         : 0;
 
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 1000 }}>
+        <div className="page-pad" style={{ maxWidth: 1000 }}>
 
             {/* Header */}
             <div style={{ marginBottom: 24 }}>
@@ -235,7 +237,73 @@ export default function FeedTransactionsPage() {
                 <EmptyState message="No transactions found." />
             )}
 
-            {!loading && transactions.length > 0 && (
+            {!loading && transactions.length > 0 && (isMobile ? (
+                /* ── Mobile: card list ── */
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {transactions.map((tx) => {
+                        const amountStr = formatCents(tx.amountCents);
+                        const isNegBeats = tx.beats !== null && tx.beats < 0;
+                        const fromName = tx.fromName ?? (!tx.fromEmail ? FROM_FALLBACK[tx.txType] : null) ?? tx.fromEmail;
+                        const toName = tx.toName ?? TO_FALLBACK[tx.txType];
+                        return (
+                            <div key={tx.id} style={{
+                                background: "var(--surface)",
+                                border: "1px solid var(--border)",
+                                borderRadius: 10,
+                                padding: "14px 16px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 8,
+                            }}>
+                                {/* Row 1: type chip + date */}
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                                    <TypeChip txType={tx.txType} />
+                                    <span style={{ fontSize: 12, color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>
+                                        {tx.createdAt
+                                            ? new Date(tx.createdAt).toLocaleString("en-US", {
+                                                month: "short", day: "numeric",
+                                                hour: "numeric", minute: "2-digit",
+                                            })
+                                            : "—"}
+                                    </span>
+                                </div>
+
+                                {/* Row 2: From → To */}
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                                    <span style={{ fontWeight: 500, color: "var(--text-primary)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {fromName || "—"}
+                                    </span>
+                                    <span style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>→</span>
+                                    <span style={{ fontWeight: 500, color: "var(--text-primary)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {toName || "—"}
+                                    </span>
+                                </div>
+
+                                {/* Row 3: beats + amount */}
+                                <div style={{ display: "flex", gap: 16, fontSize: 13 }}>
+                                    {tx.beats !== null && (
+                                        <span style={{
+                                            fontWeight: 600,
+                                            color: isNegBeats ? "var(--danger)" : "var(--text-primary)",
+                                        }}>
+                                            {tx.beats > 0 ? "+" : ""}{tx.beats} ♪
+                                        </span>
+                                    )}
+                                    {amountStr && (
+                                        <span style={{
+                                            fontWeight: 600,
+                                            color: amountStr.startsWith("-") ? "var(--danger)" : "var(--success)",
+                                        }}>
+                                            {amountStr}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                /* ── Desktop: grid table ── */
                 <div style={{
                     background: "var(--surface)",
                     border: "1px solid var(--border)",
@@ -336,7 +404,7 @@ export default function FeedTransactionsPage() {
                         );
                     })}
                 </div>
-            )}
+            ))}
 
             {!loading && displayCount > transactions.length && (
                 <p style={{ fontSize: 12, color: "var(--text-tertiary)", textAlign: "center", paddingTop: 12 }}>

@@ -712,7 +712,7 @@ function ApprovePanel({
                         <Field label="Dance Name" required value={danceName}
                             onChange={(v) => { setDanceName(v); setErrors((e) => ({ ...e, danceName: "" })); }}
                             error={errors.danceName} />
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                        <div className="grid-2">
                             <Field label="Song Title" required value={songTitle}
                                 onChange={(v) => { setSongTitle(v); setErrors((e) => ({ ...e, songTitle: "" })); }}
                                 error={errors.songTitle} />
@@ -721,7 +721,7 @@ function ApprovePanel({
                                 error={errors.artist} hint="Comma-separated" />
                         </div>
                         <ChoreographerTags values={choreographers} onChange={setChoreographers} />
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                        <div className="grid-2">
                             <Field label="Difficulty" value={difficulty} onChange={setDifficulty} />
                             {dance.count && <Field label="Count" value={dance.count} readOnly />}
                         </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PageShell, EmptyState, Badge, ExpandableCard, InfoRow } from "@/components/ui";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface SessionReport {
     id: string;
@@ -102,6 +103,7 @@ function DanceTypeBadge({ type }: { type: string | null }) {
 
 function AllRequests({ requesters }: { requesters: Requester[] }) {
     const [openIdx, setOpenIdx] = useState<number | null>(null);
+    const isMobile = useIsMobile();
 
     if (requesters.length === 0) return <p style={{ fontSize: 12, color: "var(--text-tertiary)", padding: "8px 0" }}>No request history.</p>;
 
@@ -144,7 +146,21 @@ function AllRequests({ requesters }: { requesters: Requester[] }) {
                                 <div style={{ borderTop: "1px solid var(--border)", padding: "8px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
                                     {req.requests.map((r, ri) => {
                                         const sc = STATUS_CONFIG[r.status ?? ""] ?? { label: r.status ?? "?", color: "var(--text-tertiary)" };
-                                        return (
+                                        return isMobile ? (
+                                            <div key={ri} style={{ display: "flex", flexDirection: "column", gap: 2, padding: "4px 0", borderBottom: ri < req.requests.length - 1 ? "1px solid var(--border)" : "none" }}>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                    <span style={{ fontSize: 12, color: "var(--text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                        {r.danceName ?? "Custom request"}
+                                                    </span>
+                                                    <DanceTypeBadge type={r.danceType} />
+                                                </div>
+                                                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                                                    <span style={{ fontSize: 11, fontWeight: 600, color: sc.color }}>{sc.label}</span>
+                                                    {r.tipCents > 0 && <span style={{ fontSize: 11, color: "var(--success)" }}>+{formatCents(r.tipCents)}</span>}
+                                                    {r.createdAt && <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{formatTime(r.createdAt)}</span>}
+                                                </div>
+                                            </div>
+                                        ) : (
                                             <div key={ri} style={{ display: "grid", gridTemplateColumns: "1fr auto 80px 70px 70px", gap: 8, alignItems: "center" }}>
                                                 <span style={{ fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                                     {r.danceName ?? "Custom request"}

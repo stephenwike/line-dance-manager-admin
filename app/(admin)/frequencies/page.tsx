@@ -107,7 +107,7 @@ function FreqFormFields({ f, set, err }: { f: FreqFormState; set: (p: Partial<Fr
                 </Field>
             )}
             {f.kind === "MONTHLY_NTH_WEEKDAY" && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div className="grid-2" style={{ gap: 8 }}>
                     <Field label="Which">
                         <select value={f.nth} onChange={(e) => set({ nth: Number(e.target.value) })} style={inputStyle}>
                             {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{nthLabel(n)}</option>)}
@@ -126,7 +126,7 @@ function FreqFormFields({ f, set, err }: { f: FreqFormState; set: (p: Partial<Fr
                 </Field>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div className="grid-2" style={{ gap: 8 }}>
                 <Field label="Start time">
                     <input value={f.startTime} onChange={(e) => set({ startTime: e.target.value })} placeholder="5:00 PM" style={inputStyle} />
                 </Field>
@@ -136,7 +136,7 @@ function FreqFormFields({ f, set, err }: { f: FreqFormState; set: (p: Partial<Fr
             </div>
 
             {f.kind !== "ONE_TIME" && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div className="grid-2" style={{ gap: 8 }}>
                     <Field label="Active from (optional)">
                         <input value={f.startDate} onChange={(e) => set({ startDate: e.target.value })} placeholder="YYYY-MM-DD" style={inputStyle} />
                     </Field>
@@ -356,7 +356,7 @@ function FrequenciesInner() {
                         </p>
                     ) : (
                         <>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                            <div className="grid-2" style={{ gap: 8 }}>
                                 <Field label="Event type">
                                     <select value={addEventTypeId} onChange={(e) => applyEventTypeDefaults(e.target.value)} style={inputStyle}>
                                         {eventTypes.map((et) => (

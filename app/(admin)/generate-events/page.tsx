@@ -56,7 +56,7 @@ export default function GenerateEventsPage() {
     }
 
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 600 }}>
+        <div className="page-pad" style={{ maxWidth: 600 }}>
             <div style={{ marginBottom: 24 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>Generate Events</h1>
                 <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
@@ -65,7 +65,7 @@ export default function GenerateEventsPage() {
             </div>
 
             <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="grid-2">
                     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>From</span>
                         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={inputStyle} />
@@ -87,7 +87,7 @@ export default function GenerateEventsPage() {
                         <p style={{ fontSize: 13, fontWeight: 600, color: result.upserted > 0 ? "var(--success)" : "var(--text-primary)" }}>
                             {result.note ?? (result.ok ? "Done." : "Unexpected result.")}
                         </p>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                        <div className="grid-3" style={{ gap: 8 }}>
                             {[
                                 { label: "Created", value: result.upserted },
                                 { label: "Already existed", value: result.matched },

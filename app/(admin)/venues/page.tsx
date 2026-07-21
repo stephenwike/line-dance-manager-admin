@@ -86,7 +86,7 @@ function AddVenueForm({ onSaved }: { onSaved: () => void }) {
                         style={inputStyle}
                     />
                 </Field>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 8 }}>
+                <div className="grid-2" style={{ gap: 8 }}>
                     <Field label="City">
                         <input
                             value={city}

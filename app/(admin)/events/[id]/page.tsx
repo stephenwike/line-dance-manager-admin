@@ -284,7 +284,7 @@ export default function EventDetailPage() {
 
 
     return (
-        <div style={{ padding: "32px 36px", maxWidth: 760 }}>
+        <div className="page-pad" style={{ maxWidth: 760 }}>
             {/* Header */}
             <div style={{ marginBottom: 24 }}>
                 <div style={{ marginBottom: 10 }}>
@@ -308,7 +308,7 @@ export default function EventDetailPage() {
                 {/* Event details */}
                 <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
                     <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Event details</p>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div className="grid-2" style={{ gap: 10 }}>
                         <Field label="Start time">
                             <input value={draft.startTime} onChange={(e) => setField("startTime", e.target.value)} placeholder="6:00 PM" style={inputStyle} />
                         </Field>
@@ -368,7 +368,7 @@ export default function EventDetailPage() {
                                             Remove
                                         </button>
                                     </div>
-                                    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr 1fr", gap: 8 }}>
+                                    <div className="lesson-grid">
                                         <Field label="Time">
                                             <input value={l.time} onChange={(e) => updateLesson(l.id, { time: e.target.value })}
                                                 placeholder="6:45 PM" style={inputStyle} />
