@@ -178,7 +178,7 @@ export default function IntermediateSocialRegistrations() {
                                             style={{ color: "var(--text-secondary)", border: "1px solid var(--border)", background: "transparent", padding: "10px 0" }}
                                         />
                                     </div>
-                                    {r.paymentMethod === "venmo" && r.paymentStatus === "pending" && (
+                                    {r.paymentStatus !== "paid" && (
                                         <ActionButton
                                             label="Mark Paid"
                                             loading={pending[r._id] === "paid"}
@@ -195,7 +195,7 @@ export default function IntermediateSocialRegistrations() {
                                 </div>
                             ) : (
                                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                                    {r.paymentMethod === "venmo" && r.paymentStatus === "pending" && (
+                                    {r.paymentStatus !== "paid" && (
                                         <ActionButton
                                             label="Mark Paid"
                                             loading={pending[r._id] === "paid"}
