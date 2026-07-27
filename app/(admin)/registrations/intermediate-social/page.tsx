@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
 type AttendeeStatus = "registered" | "approved" | "waitlisted" | "removed";
 type Tab = "registered" | "guestlist" | "waitlist";
+
+interface EmailRecord {
+    templateId: string;
+    subject: string;
+    sentAt: string;
+}
 
 interface Registration {
     _id: string;
@@ -22,6 +28,52 @@ interface Registration {
     createdAt: string | null;
     attendeeStatus: AttendeeStatus;
     requests: { text: string; danceId: string | null }[];
+    emails: EmailRecord[];
+}
+
+const EVENT_DATE = "Saturday, September 12, 2026";
+const EVENT_SHORT = "Sep 12";
+
+interface EmailTemplate {
+    id: string;
+    label: string;
+    subject: string;
+    body: (firstName: string) => string;
+}
+
+const EMAIL_TEMPLATES: EmailTemplate[] = [
+    {
+        id: "guestlist-confirmed",
+        label: "Guestlist Confirmed",
+        subject: `You're on the guestlist! — LDCO Int LD Social ${EVENT_SHORT}`,
+        body: (name) => `Hi ${name},\n\nGreat news — you've been approved for the LDCO Intermediate Line Dance Social!\n\nDate: ${EVENT_DATE}\nLocation: [VENUE]\nTime: [TIME]\n\nReply if you have any questions.\n\nSee you on the dance floor,\nStephen`,
+    },
+    {
+        id: "waitlist",
+        label: "Waitlist Notice",
+        subject: `Waitlist — LDCO Int LD Social ${EVENT_SHORT}`,
+        body: (name) => `Hi ${name},\n\nThank you for registering for the LDCO Intermediate Line Dance Social on ${EVENT_DATE}!\n\nWe've reached capacity, but you're on the waitlist. We'll reach out as soon as a spot opens up.\n\nStephen`,
+    },
+    {
+        id: "reminder",
+        label: "Reminder",
+        subject: `Reminder: LDCO Int LD Social — ${EVENT_DATE}`,
+        body: (name) => `Hi ${name},\n\nJust a reminder that the LDCO Intermediate Line Dance Social is coming up!\n\nDate: ${EVENT_DATE}\nLocation: [VENUE]\nTime: [TIME]\n\nLooking forward to seeing you there!\n\nStephen`,
+    },
+    {
+        id: "custom",
+        label: "Custom",
+        subject: `LDCO Int LD Social — ${EVENT_SHORT}`,
+        body: (name) => `Hi ${name},\n\n`,
+    },
+];
+
+function gmailUrl(to: string, subject: string, body: string) {
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function templateLabel(id: string) {
+    return EMAIL_TEMPLATES.find((t) => t.id === id)?.label ?? id;
 }
 
 export default function IntermediateSocialRegistrations() {
@@ -45,6 +97,12 @@ export default function IntermediateSocialRegistrations() {
     }
 
     useEffect(() => { load(); }, []);
+
+    function onEmailLogged(id: string, email: EmailRecord) {
+        setRegistrations(prev => prev.map(r =>
+            r._id === id ? { ...r, emails: [...r.emails, email] } : r
+        ));
+    }
 
     async function setStatus(id: string, attendeeStatus: AttendeeStatus) {
         setPending(p => ({ ...p, [id]: attendeeStatus }));
@@ -162,6 +220,7 @@ export default function IntermediateSocialRegistrations() {
                         <RegistrationTable
                             rows={registered}
                             pending={pending}
+                            onEmailLogged={onEmailLogged}
                             actions={(r, mobile) => mobile ? (
                                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -230,6 +289,7 @@ export default function IntermediateSocialRegistrations() {
                         <RegistrationTable
                             rows={guestlist}
                             pending={pending}
+                            onEmailLogged={onEmailLogged}
                             actions={(r, mobile) => (
                                 <ActionButton
                                     label="Remove"
@@ -246,6 +306,7 @@ export default function IntermediateSocialRegistrations() {
                         <RegistrationTable
                             rows={waitlist}
                             pending={pending}
+                            onEmailLogged={onEmailLogged}
                             actions={(r, mobile) => (
                                 <ActionButton
                                     label="Approve"
@@ -268,13 +329,16 @@ function RegistrationTable({
     pending,
     actions,
     emptyMessage = "No registrations yet.",
+    onEmailLogged,
 }: {
     rows: Registration[];
     pending: Record<string, string>;
     actions: (r: Registration, isMobile: boolean) => React.ReactNode;
     emptyMessage?: string;
+    onEmailLogged: (id: string, email: EmailRecord) => void;
 }) {
     const isMobile = useIsMobile();
+    const [expandedEmail, setExpandedEmail] = useState<string | null>(null);
 
     if (rows.length === 0) {
         return (
@@ -362,6 +426,14 @@ function RegistrationTable({
                             </p>
                         )}
 
+                        {/* Email section */}
+                        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                                Emails
+                            </p>
+                            <EmailPanel reg={r} isMobile onLogged={(email) => onEmailLogged(r._id, email)} />
+                        </div>
+
                         {/* Actions */}
                         <div style={{ paddingTop: 8, borderTop: "1px solid var(--border)" }}>
                             {actions(r, true)}
@@ -395,8 +467,9 @@ function RegistrationTable({
                 </thead>
                 <tbody>
                     {rows.map((r, i) => (
-                        <tr key={r._id} style={{
-                            borderBottom: i < rows.length - 1 ? "1px solid var(--border)" : "none",
+                        <React.Fragment key={r._id}>
+                        <tr style={{
+                            borderBottom: "1px solid var(--border)",
                             opacity: pending[r._id] ? 0.6 : 1,
                             transition: "opacity 0.15s",
                         }}>
@@ -450,11 +523,118 @@ function RegistrationTable({
                                     </>
                                 ) : "—"}
                             </td>
-                            <td style={{ padding: "12px 14px", textAlign: "right" }}>{actions(r, false)}</td>
+                            <td style={{ padding: "12px 14px" }}>
+                                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                                    <button
+                                        onClick={() => setExpandedEmail(expandedEmail === r._id ? null : r._id)}
+                                        title="Email history & templates"
+                                        style={{
+                                            display: "inline-flex", alignItems: "center", gap: 4,
+                                            fontSize: 12, padding: "4px 8px", borderRadius: 6,
+                                            border: "1px solid var(--border)",
+                                            background: expandedEmail === r._id ? "var(--accent-subtle)" : "transparent",
+                                            color: expandedEmail === r._id ? "var(--accent-text)" : "var(--text-tertiary)",
+                                            cursor: "pointer",
+                                        }}
+                                    >
+                                        ✉{r.emails.length > 0 && (
+                                            <span style={{
+                                                fontSize: 10, fontWeight: 700,
+                                                background: "var(--accent-subtle)", color: "var(--accent-text)",
+                                                borderRadius: 10, padding: "0 5px",
+                                            }}>{r.emails.length}</span>
+                                        )}
+                                    </button>
+                                    {actions(r, false)}
+                                </div>
+                            </td>
                         </tr>
+                        {expandedEmail === r._id && (
+                            <tr style={{ background: "var(--surface-raised)" }}>
+                                <td colSpan={8} style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+                                    <EmailPanel reg={r} isMobile={false} onLogged={(email) => onEmailLogged(r._id, email)} />
+                                </td>
+                            </tr>
+                        )}
+                        </React.Fragment>
                     ))}
                 </tbody>
             </table>
+        </div>
+    );
+}
+
+function EmailPanel({ reg, isMobile, onLogged }: {
+    reg: Registration;
+    isMobile: boolean;
+    onLogged: (email: EmailRecord) => void;
+}) {
+    const [sending, setSending] = useState<string | null>(null);
+    const firstName = reg.name.trim().split(" ")[0] || reg.name;
+
+    async function handleSend(template: EmailTemplate) {
+        window.open(gmailUrl(reg.email, template.subject, template.body(firstName)), "_blank");
+        setSending(template.id);
+        const record: EmailRecord = { templateId: template.id, subject: template.subject, sentAt: new Date().toISOString() };
+        try {
+            const res = await fetch(`/api/admin/registrations/${reg._id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ addEmail: record }),
+            });
+            if (res.ok) onLogged(record);
+        } finally {
+            setSending(null);
+        }
+    }
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* History */}
+            {reg.emails.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 2 }}>
+                    {reg.emails.map((e, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 12, color: "var(--success-text)" }}>✓</span>
+                            <span style={{ fontSize: 12, color: "var(--text-secondary)", flex: 1 }}>
+                                {templateLabel(e.templateId)}
+                            </span>
+                            <span style={{ fontSize: 11, color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>
+                                {new Date(e.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {reg.emails.length === 0 && (
+                <p style={{ fontSize: 12, color: "var(--text-tertiary)", margin: 0 }}>No emails sent yet</p>
+            )}
+            {/* Template buttons */}
+            <div style={isMobile
+                ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }
+                : { display: "flex", gap: 6, flexWrap: "wrap" }
+            }>
+                {EMAIL_TEMPLATES.map((t) => (
+                    <button
+                        key={t.id}
+                        onClick={() => handleSend(t)}
+                        disabled={sending !== null}
+                        style={{
+                            fontSize: 12, fontWeight: 500,
+                            padding: isMobile ? "9px 0" : "4px 10px",
+                            borderRadius: 6,
+                            border: "1px solid var(--border)",
+                            background: "var(--surface)",
+                            color: "var(--text-secondary)",
+                            cursor: sending !== null ? "not-allowed" : "pointer",
+                            opacity: sending !== null ? 0.6 : 1,
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        {sending === t.id ? "Opening…" : `✉ ${t.label}`}
+                    </button>
+                ))}
+            </div>
         </div>
     );
 }

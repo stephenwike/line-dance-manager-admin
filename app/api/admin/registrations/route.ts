@@ -31,5 +31,6 @@ export async function GET(req: Request) {
         createdAt: r.createdAt ? r.createdAt.toISOString() : null,
         attendeeStatus: r.attendeeStatus ?? "registered",
         requests: Array.isArray(r.requests) ? r.requests : [],
+        emails: Array.isArray(r.emails) ? r.emails : [],
     })));
 }

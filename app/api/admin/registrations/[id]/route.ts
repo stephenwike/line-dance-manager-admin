@@ -13,6 +13,17 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
+    const db = await getMainDb();
+
+    if (body.addEmail) {
+        const result = await db.collection("event_registrations").updateOne(
+            { _id: new ObjectId(id) },
+            { $push: { emails: { templateId: body.addEmail.templateId, subject: body.addEmail.subject, sentAt: body.addEmail.sentAt } } as never }
+        );
+        if (result.matchedCount === 0) return NextResponse.json({ error: "Registration not found" }, { status: 404 });
+        return NextResponse.json({ success: true });
+    }
+
     const update: Record<string, unknown> = {};
 
     if ("attendeeStatus" in body) {
@@ -28,7 +39,6 @@ export async function PATCH(
         return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
     }
 
-    const db = await getMainDb();
     const result = await db.collection("event_registrations").updateOne(
         { _id: new ObjectId(id) },
         { $set: update }
