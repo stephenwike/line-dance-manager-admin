@@ -31,7 +31,6 @@ export async function PATCH(
     }
     if (body.markPaid) {
         update.paymentStatus = "paid";
-        update.paymentMethod = "venmo";
         update.paidAt = new Date();
     }
 
