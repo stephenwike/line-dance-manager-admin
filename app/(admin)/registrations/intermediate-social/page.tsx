@@ -338,7 +338,7 @@ function RegistrationTable({
     onEmailLogged: (id: string, email: EmailRecord) => void;
 }) {
     const isMobile = useIsMobile();
-    const [expandedEmail, setExpandedEmail] = useState<string | null>(null);
+    const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
     if (rows.length === 0) {
         return (
@@ -351,213 +351,204 @@ function RegistrationTable({
     if (isMobile) {
         return (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {rows.map((r) => (
-                    <div key={r._id} style={{
-                        background: "var(--surface)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 10,
-                        padding: "14px 16px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
-                        opacity: pending[r._id] ? 0.6 : 1,
-                        transition: "opacity 0.15s",
-                    }}>
-                        {/* Name + payment */}
-                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <p style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</p>
-                                {r.address && <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.address}</p>}
-                            </div>
-                            <div style={{ flexShrink: 0 }}>
-                                <PaymentCell reg={r} />
-                            </div>
-                        </div>
-
-                        {/* Contact */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                            <a href={`mailto:${r.email}`} style={{ fontSize: 13, color: "var(--accent-text)", textDecoration: "none" }}>
-                                {r.email}
-                            </a>
-                            {r.phone && <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{r.phone}</span>}
-                        </div>
-
-                        {/* Waiver */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            {r.agreedToWaiver ? (
-                                <>
-                                    <Badge text="Waiver signed" color="#15803d" bg="rgba(34,197,94,0.12)" />
-                                    {r.waiverSignature && (
-                                        <span style={{ fontSize: 11, color: "var(--text-secondary)", fontStyle: "italic" }}>
-                                            "{r.waiverSignature}"
-                                        </span>
+                {rows.map((r) => {
+                    const open = expandedRow === r._id;
+                    return (
+                        <div key={r._id} style={{
+                            background: "var(--surface)",
+                            border: "1px solid var(--border)",
+                            borderRadius: 10,
+                            overflow: "hidden",
+                            opacity: pending[r._id] ? 0.6 : 1,
+                            transition: "opacity 0.15s",
+                        }}>
+                            {/* Compact header — always visible */}
+                            <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                                    <p style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {r.name}
+                                    </p>
+                                    <div style={{ flexShrink: 0 }}><PaymentCell reg={r} /></div>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                    {r.agreedToWaiver
+                                        ? <Badge text="✓ Waiver" color="#15803d" bg="rgba(34,197,94,0.12)" />
+                                        : <Badge text="✗ Waiver" color="var(--danger-text)" bg="var(--danger-subtle)" />
+                                    }
+                                    {r.requests.length > 0 && (
+                                        <Badge text={`${r.requests.length} req`} color="var(--text-secondary)" bg="var(--surface-raised)" />
                                     )}
-                                </>
-                            ) : (
-                                <Badge text="Waiver not signed" color="var(--danger-text)" bg="var(--danger-subtle)" />
-                            )}
-                        </div>
-
-                        {/* Requests */}
-                        {r.requests.length > 0 && (
-                            <div>
-                                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>
-                                    Requests
-                                </p>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                                    {r.requests.map((req, i) => (
-                                        <span key={i} style={{
-                                            fontSize: 11, color: "var(--text-secondary)",
-                                            background: "var(--surface-raised)",
-                                            border: "1px solid var(--border)",
-                                            borderRadius: 4, padding: "2px 6px",
-                                        }}>
-                                            {req.text}
-                                        </span>
-                                    ))}
+                                    {r.emails.length > 0 && (
+                                        <Badge text={`✉ ${r.emails.length}`} color="var(--accent-text)" bg="var(--accent-subtle)" />
+                                    )}
+                                    <button
+                                        onClick={() => setExpandedRow(open ? null : r._id)}
+                                        style={{
+                                            marginLeft: "auto", fontSize: 11, padding: "3px 8px",
+                                            borderRadius: 4, border: "1px solid var(--border)",
+                                            background: "transparent", color: "var(--text-tertiary)", cursor: "pointer",
+                                        }}
+                                    >
+                                        {open ? "▲ Less" : "▼ More"}
+                                    </button>
                                 </div>
                             </div>
-                        )}
 
-                        {/* Registered date */}
-                        {r.createdAt && (
-                            <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-                                Registered {new Date(r.createdAt).toLocaleDateString()} at {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                        )}
+                            {/* Expandable details */}
+                            {open && (
+                                <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 10, background: "var(--surface-raised)" }}>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                        <a href={`mailto:${r.email}`} style={{ fontSize: 13, color: "var(--accent-text)", textDecoration: "none" }}>{r.email}</a>
+                                        {r.phone && <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{r.phone}</span>}
+                                        {r.address && <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{r.address}</span>}
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                        {r.agreedToWaiver ? (
+                                            <>
+                                                <Badge text="Waiver signed" color="#15803d" bg="rgba(34,197,94,0.12)" />
+                                                {r.waiverSignature && <span style={{ fontSize: 11, color: "var(--text-secondary)", fontStyle: "italic" }}>"{r.waiverSignature}"</span>}
+                                            </>
+                                        ) : (
+                                            <Badge text="Waiver not signed" color="var(--danger-text)" bg="var(--danger-subtle)" />
+                                        )}
+                                    </div>
+                                    {r.requests.length > 0 && (
+                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                            {r.requests.map((req, i) => (
+                                                <span key={i} style={{ fontSize: 11, color: "var(--text-secondary)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, padding: "2px 6px" }}>
+                                                    {req.text}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {r.createdAt && (
+                                        <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+                                            Registered {new Date(r.createdAt).toLocaleDateString()} at {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                        </p>
+                                    )}
+                                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                                        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Emails</p>
+                                        <EmailPanel reg={r} isMobile onLogged={(email) => onEmailLogged(r._id, email)} />
+                                    </div>
+                                </div>
+                            )}
 
-                        {/* Email section */}
-                        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                                Emails
-                            </p>
-                            <EmailPanel reg={r} isMobile onLogged={(email) => onEmailLogged(r._id, email)} />
+                            {/* Actions — always visible at bottom */}
+                            <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)", background: open ? "var(--surface)" : undefined }}>
+                                {actions(r, true)}
+                            </div>
                         </div>
-
-                        {/* Actions */}
-                        <div style={{ paddingTop: 8, borderTop: "1px solid var(--border)" }}>
-                            {actions(r, true)}
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         );
     }
 
     return (
-        <div style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 10,
-            overflow: "hidden",
-        }}>
+        <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", background: "var(--surface)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                     <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-raised)" }}>
-                        {["Name", "Email", "Phone", "Waiver", "Payment", "Requests", "Registered"].map(h => (
-                            <th key={h} style={{
-                                textAlign: "left", padding: "10px 14px",
+                        <th style={{ width: 36 }} />
+                        {["Name", "Status", ""].map((h, i) => (
+                            <th key={i} style={{
+                                textAlign: i === 2 ? "right" : "left",
+                                padding: "10px 14px",
                                 fontSize: 11, fontWeight: 700,
                                 textTransform: "uppercase", letterSpacing: "0.06em",
-                                color: "var(--text-secondary)", whiteSpace: "nowrap",
+                                color: "var(--text-secondary)",
                             }}>{h}</th>
                         ))}
-                        <th style={{ width: 160 }} />
                     </tr>
                 </thead>
                 <tbody>
-                    {rows.map((r, i) => (
-                        <React.Fragment key={r._id}>
-                        <tr style={{
-                            borderBottom: "1px solid var(--border)",
-                            opacity: pending[r._id] ? 0.6 : 1,
-                            transition: "opacity 0.15s",
-                        }}>
-                            <td style={{ padding: "12px 14px", fontWeight: 500, color: "var(--text-primary)" }}>
-                                {r.name}
-                                {r.address && <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>{r.address}</div>}
-                            </td>
-                            <td style={{ padding: "12px 14px" }}>
-                                <a href={`mailto:${r.email}`} style={{ color: "var(--accent-text)", textDecoration: "none", fontSize: 13 }}>
-                                    {r.email}
-                                </a>
-                            </td>
-                            <td style={{ padding: "12px 14px", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-                                {r.phone || <span style={{ opacity: 0.35 }}>—</span>}
-                            </td>
-                            <td style={{ padding: "12px 14px" }}>
-                                {r.agreedToWaiver ? (
-                                    <div>
-                                        <Badge text="Signed" color="#15803d" bg="rgba(34,197,94,0.12)" />
-                                        {r.waiverSignature && (
-                                            <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 3, fontStyle: "italic" }}>
-                                                "{r.waiverSignature}"
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <Badge text="Not signed" color="var(--danger-text)" bg="var(--danger-subtle)" />
-                                )}
-                            </td>
-                            <td style={{ padding: "12px 14px" }}><PaymentCell reg={r} /></td>
-                            <td style={{ padding: "12px 14px", verticalAlign: "top" }}>
-                                {r.requests.length === 0 ? (
-                                    <span style={{ opacity: 0.35, fontSize: 13 }}>—</span>
-                                ) : (
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                                        {r.requests.map((req, i) => (
-                                            <span key={i} style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
-                                                {req.text}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-                            </td>
-                            <td style={{ padding: "12px 14px", color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
-                                {r.createdAt ? (
-                                    <>
-                                        {new Date(r.createdAt).toLocaleDateString()}
-                                        <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-                                            {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {rows.map((r) => {
+                        const open = expandedRow === r._id;
+                        return (
+                            <React.Fragment key={r._id}>
+                                <tr
+                                    onClick={() => setExpandedRow(open ? null : r._id)}
+                                    style={{
+                                        borderBottom: "1px solid var(--border)",
+                                        opacity: pending[r._id] ? 0.6 : 1,
+                                        transition: "opacity 0.15s",
+                                        cursor: "pointer",
+                                        background: open ? "var(--surface-raised)" : undefined,
+                                    }}
+                                >
+                                    <td style={{ padding: "12px 8px 12px 14px", color: "var(--text-tertiary)", fontSize: 11, userSelect: "none" }}>
+                                        {open ? "▼" : "▶"}
+                                    </td>
+                                    <td style={{ padding: "12px 14px" }}>
+                                        <p style={{ fontWeight: 600, color: "var(--text-primary)" }}>{r.name}</p>
+                                        {r.address && <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>{r.address}</p>}
+                                    </td>
+                                    <td style={{ padding: "12px 14px" }}>
+                                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                                            <PaymentCell reg={r} />
+                                            {r.agreedToWaiver
+                                                ? <Badge text="✓ Waiver" color="#15803d" bg="rgba(34,197,94,0.12)" />
+                                                : <Badge text="✗ Waiver" color="var(--danger-text)" bg="var(--danger-subtle)" />
+                                            }
+                                            {r.requests.length > 0 && (
+                                                <Badge text={`${r.requests.length} req`} color="var(--text-secondary)" bg="var(--surface-raised)" />
+                                            )}
+                                            {r.emails.length > 0 && (
+                                                <Badge text={`✉ ${r.emails.length}`} color="var(--accent-text)" bg="var(--accent-subtle)" />
+                                            )}
                                         </div>
-                                    </>
-                                ) : "—"}
-                            </td>
-                            <td style={{ padding: "12px 14px" }}>
-                                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-                                    <button
-                                        onClick={() => setExpandedEmail(expandedEmail === r._id ? null : r._id)}
-                                        title="Email history & templates"
-                                        style={{
-                                            display: "inline-flex", alignItems: "center", gap: 4,
-                                            fontSize: 12, padding: "4px 8px", borderRadius: 6,
-                                            border: "1px solid var(--border)",
-                                            background: expandedEmail === r._id ? "var(--accent-subtle)" : "transparent",
-                                            color: expandedEmail === r._id ? "var(--accent-text)" : "var(--text-tertiary)",
-                                            cursor: "pointer",
-                                        }}
-                                    >
-                                        ✉{r.emails.length > 0 && (
-                                            <span style={{
-                                                fontSize: 10, fontWeight: 700,
-                                                background: "var(--accent-subtle)", color: "var(--accent-text)",
-                                                borderRadius: 10, padding: "0 5px",
-                                            }}>{r.emails.length}</span>
-                                        )}
-                                    </button>
-                                    {actions(r, false)}
-                                </div>
-                            </td>
-                        </tr>
-                        {expandedEmail === r._id && (
-                            <tr style={{ background: "var(--surface-raised)" }}>
-                                <td colSpan={8} style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-                                    <EmailPanel reg={r} isMobile={false} onLogged={(email) => onEmailLogged(r._id, email)} />
-                                </td>
-                            </tr>
-                        )}
-                        </React.Fragment>
-                    ))}
+                                    </td>
+                                    <td style={{ padding: "12px 14px" }} onClick={(e) => e.stopPropagation()}>
+                                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                                            {actions(r, false)}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {open && (
+                                    <tr style={{ background: "var(--surface-raised)" }}>
+                                        <td colSpan={4} style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+                                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 14 }}>
+                                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                                    <a href={`mailto:${r.email}`} style={{ fontSize: 13, color: "var(--accent-text)", textDecoration: "none" }}>{r.email}</a>
+                                                    {r.phone && <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{r.phone}</span>}
+                                                    {r.createdAt && (
+                                                        <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                                                            Registered {new Date(r.createdAt).toLocaleDateString()} at {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                                        {r.agreedToWaiver ? (
+                                                            <>
+                                                                <Badge text="Waiver signed" color="#15803d" bg="rgba(34,197,94,0.12)" />
+                                                                {r.waiverSignature && <span style={{ fontSize: 11, color: "var(--text-secondary)", fontStyle: "italic" }}>"{r.waiverSignature}"</span>}
+                                                            </>
+                                                        ) : (
+                                                            <Badge text="Waiver not signed" color="var(--danger-text)" bg="var(--danger-subtle)" />
+                                                        )}
+                                                    </div>
+                                                    {r.requests.length > 0 && (
+                                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                                            {r.requests.map((req, i) => (
+                                                                <span key={i} style={{ fontSize: 11, color: "var(--text-secondary)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, padding: "2px 6px" }}>
+                                                                    {req.text}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+                                                <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Emails</p>
+                                                <EmailPanel reg={r} isMobile={false} onLogged={(email) => onEmailLogged(r._id, email)} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </React.Fragment>
+                        );
+                    })}
                 </tbody>
             </table>
         </div>
