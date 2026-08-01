@@ -23,6 +23,7 @@ interface EventDraft {
     isCancelled: boolean;
     cancelNote: string;
     substitute: string;
+    specialNote: string;
     lessons: LessonDraft[];
 }
 
@@ -38,6 +39,7 @@ interface EventDetail {
     isCancelled: boolean;
     cancelNote: string | null;
     substitute: string | null;
+    specialNote: string | null;
     lessons: { time: string | null; danceId: string | null; dance: string | null; level: string | null; link: string | null; committed: boolean }[];
     eventType: { _id: string; title: string; level: string; price: string } | null;
     venue: { _id: string; name: string; address: string | null; city: string | null; state: string | null } | null;
@@ -61,6 +63,7 @@ function normalizeDraft(ev: EventDetail): EventDraft {
         isCancelled: ev.isCancelled,
         cancelNote: ev.cancelNote ?? "",
         substitute: ev.substitute ?? "",
+        specialNote: ev.specialNote ?? "",
         lessons: ev.lessons.map((l) => ({
             id: uid(),
             time: l.time ?? "",
@@ -252,6 +255,7 @@ export default function EventDetailPage() {
                     isCancelled: draft.isCancelled,
                     cancelNote: draft.isCancelled && draft.cancelNote.trim() ? draft.cancelNote.trim() : null,
                     substitute: !draft.isCancelled && draft.substitute.trim() ? draft.substitute.trim() : null,
+                    specialNote: draft.specialNote.trim() || null,
                     lessons,
                 }),
             });
@@ -330,6 +334,15 @@ export default function EventDetailPage() {
                             <input value={draft.substitute} onChange={(e) => setField("substitute", e.target.value)} placeholder="Substitute instructor name" style={inputStyle} />
                         </Field>
                     )}
+                    <Field label="Special note (optional)">
+                        <textarea
+                            value={draft.specialNote}
+                            onChange={(e) => setField("specialNote", e.target.value)}
+                            placeholder="Extra info shown on the website…"
+                            rows={3}
+                            style={{ ...inputStyle, resize: "vertical" }}
+                        />
+                    </Field>
                 </div>
 
                 {/* Lessons */}

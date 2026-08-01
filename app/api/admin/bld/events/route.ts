@@ -35,6 +35,7 @@ export async function POST(req: Request) {
         const isCancelled = !!body.isCancelled;
         const cancelNote = clean(body.cancelNote);
         const substitute = clean(body.substitute);
+        const specialNote = clean(body.specialNote);
         const lessons = normalizeLessons(body.lessons);
 
         if (!ObjectId.isValid(eventTypeId)) return NextResponse.json({ error: "Invalid eventTypeId" }, { status: 400 });
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
         const filter = { eventTypeId: etId, date, startTime };
         const update = {
             $setOnInsert: { eventTypeId: etId, date, startTime },
-            $set: { endTime, durationMinutes, isCancelled, cancelNote, substitute, lessons, updatedAt: new Date() },
+            $set: { endTime, durationMinutes, isCancelled, cancelNote, substitute, specialNote, lessons, updatedAt: new Date() },
         };
 
         const res = await db.collection("events").updateOne(filter, update, { upsert: true });

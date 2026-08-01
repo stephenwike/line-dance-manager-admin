@@ -82,6 +82,7 @@ export async function GET(_req: Request, { params }: Ctx) {
         isCancelled: !!ev.isCancelled,
         cancelNote: ev.cancelNote ?? null,
         substitute: ev.substitute ?? null,
+        specialNote: ev.specialNote ?? null,
         lessons: Array.isArray(ev.lessons) ? ev.lessons : [],
         eventType: eventType ? { _id: String(eventType._id), title: eventType.title ?? "", level: eventType.level ?? "", price: eventType.price ?? "" } : null,
         venue: venue ? { _id: String(venue._id), name: venue.name ?? "", address: venue.address ?? null, city: venue.city ?? null, state: venue.state ?? null } : null,
@@ -104,6 +105,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
         if (typeof body.isCancelled === "boolean") patch.isCancelled = body.isCancelled;
         if (body.cancelNote === null || typeof body.cancelNote === "string") patch.cancelNote = clean(body.cancelNote);
         if (body.substitute === null || typeof body.substitute === "string") patch.substitute = clean(body.substitute);
+        if (body.specialNote === null || typeof body.specialNote === "string") patch.specialNote = clean(body.specialNote);
 
         const db = await getBldDb();
         const oid = new ObjectId(id);

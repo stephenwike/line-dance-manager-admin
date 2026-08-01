@@ -128,6 +128,7 @@ function PlanLessonInner() {
     const [cancelNote, setCancelNote] = useState("");
     const [hasSubstitute, setHasSubstitute] = useState(false);
     const [substituteName, setSubstituteName] = useState("");
+    const [specialNote, setSpecialNote] = useState("");
 
     const [lessons, setLessons] = useState<LessonDraft[]>([
         { id: uid(), time: "", danceId: null, dance: "", level: "", link: "" },
@@ -194,6 +195,7 @@ function PlanLessonInner() {
                 eventTypeId, date, startTime, endTime,
                 isCancelled, cancelNote: nullable(cancelNote),
                 substitute: hasSubstitute ? nullable(substituteName) : null,
+                specialNote: nullable(specialNote),
                 lessons: isCancelled ? [] : lessons.map((l) => ({
                     time: nullable(l.time), danceId: l.danceId,
                     dance: nullable(l.dance), level: nullable(l.level), link: nullable(l.link),
@@ -276,6 +278,15 @@ function PlanLessonInner() {
                             )}
                         </>
                     )}
+                    <Field label="Special note (optional)">
+                        <textarea
+                            value={specialNote}
+                            onChange={(e) => setSpecialNote(e.target.value)}
+                            placeholder="Extra info shown on the website…"
+                            rows={3}
+                            style={{ ...inputStyle, resize: "vertical" }}
+                        />
+                    </Field>
                 </div>
 
                 {/* Lessons */}

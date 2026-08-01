@@ -71,8 +71,10 @@ export async function GET(req: Request) {
         const activeEtIds = new Set(etDocs.map((et) => String(et._id)));
 
         const eventByKey = new Map<string, Record<string, unknown>>();
+        const eventByDateKey = new Map<string, Record<string, unknown>>();
         for (const ev of eventDocs) {
             eventByKey.set(`${String(ev.eventTypeId)}|${ev.date}|${ev.startTime}`, ev as Record<string, unknown>);
+            eventByDateKey.set(`${String(ev.eventTypeId)}|${ev.date}`, ev as Record<string, unknown>);
         }
 
         const occurrences: Record<string, unknown>[] = [];
@@ -123,7 +125,8 @@ export async function GET(req: Request) {
 
         const out = occurrences
             .map((o) => {
-                const ev = eventByKey.get(o.key as string);
+                const ev = eventByKey.get(o.key as string)
+                    ?? eventByDateKey.get(`${o.eventTypeId as string}|${o.date as string}`);
                 const status = computeStatus(ev);
                 const row = {
                     key: o.key as string,
