@@ -45,8 +45,8 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
     {
         id: "guestlist-confirmed",
         label: "Guestlist Confirmed",
-        subject: `You're on the guestlist! — LDCO Int LD Social ${EVENT_SHORT}`,
-        body: (name) => `Hi ${name},\n\nGreat news — you've been approved for the LDCO Intermediate Line Dance Social!\n\nDate: ${EVENT_DATE}\nLocation: [VENUE]\nTime: [TIME]\n\nReply if you have any questions.\n\nSee you on the dance floor,\nStephen`,
+        subject: `Registration Confirmed — Intermediate Line Dance Social ${EVENT_SHORT}`,
+        body: (name) => `Hello ${name},\n\nThank you for registering for the Intermediate Line Dance Social. Your registration has been confirmed, and we're looking forward to seeing you there!\n\nDate: Saturday, September 12, 2026\nTime: 12:00 PM – 4:00 PM\nLocation:\nThe Denver Turnverein\n1570 N Clarkson St\nDenver, CO 80218\n\nDance Requests\n\nYou may submit up to 10 line dance requests for the social. To submit your requests, simply reply to this email, or sign in to your account at beyondlinedance.com and click the update requests button from the home page.\n\nThe Guaranteed Dance List will be released on Monday, August 31.\n\nIf you have any questions before the event, simply reply to this email.\n\nWe look forward to dancing with you!\n\nBest,\nStephen`,
     },
     {
         id: "waitlist",
