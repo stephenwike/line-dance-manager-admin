@@ -28,6 +28,8 @@ interface EventDraft {
 }
 
 interface DanceHit { _id: string; danceName: string; stepsheet: string | null; difficulty: string | null }
+interface TemplateLesson { time: string | null; dance: string | null; level: string | null; link: string | null }
+interface EventTemplate { _id: string; name: string; isDefault: boolean; lessons: TemplateLesson[] }
 
 interface EventDetail {
     _id: string;
@@ -182,6 +184,7 @@ export default function EventDetailPage() {
     const [saving, setSaving] = useState(false);
     const [saveErr, setSaveErr] = useState<string | null>(null);
     const [saved, setSaved] = useState(false);
+    const [templates, setTemplates] = useState<EventTemplate[]>([]);
 
     async function load() {
         setLoading(true);
@@ -191,6 +194,28 @@ export default function EventDetailPage() {
             if (data.error) throw new Error(data.error);
             setEv(data);
             setDraft(normalizeDraft(data));
+            if (data.eventTypeId) {
+                fetch(`/api/admin/bld/event-templates?eventTypeId=${data.eventTypeId}`)
+                    .then((r) => r.json())
+                    .then((t: EventTemplate[]) => {
+                        const tmplList = Array.isArray(t) ? t : [];
+                        setTemplates(tmplList);
+                        const noLessons = !Array.isArray(data.lessons) || data.lessons.length === 0;
+                        if (noLessons) {
+                            const def = tmplList.find((tmpl) => tmpl.isDefault);
+                            if (def) {
+                                setDraft((prev) => prev ? {
+                                    ...prev,
+                                    lessons: def.lessons.map((l) => ({
+                                        id: uid(), time: l.time ?? "", danceId: null,
+                                        dance: l.dance ?? "", level: l.level ?? "", link: l.link ?? "", committed: false,
+                                    })),
+                                } : prev);
+                            }
+                        }
+                    })
+                    .catch(() => {});
+            }
         } catch (e: unknown) {
             setLoadErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -219,6 +244,17 @@ export default function EventDetailPage() {
             const time = nextLessonTime(prev.lessons, prev.startTime);
             return { ...prev, lessons: [...prev.lessons, { id: uid(), time, danceId: null, dance: "", level: "", link: "", committed: false }] };
         });
+        setSaved(false);
+    }
+
+    function applyTemplate(tmpl: EventTemplate) {
+        setDraft((prev) => prev ? {
+            ...prev,
+            lessons: tmpl.lessons.map((l) => ({
+                id: uid(), time: l.time ?? "", danceId: null,
+                dance: l.dance ?? "", level: l.level ?? "", link: l.link ?? "", committed: false,
+            })),
+        } : prev);
         setSaved(false);
     }
 
@@ -348,9 +384,29 @@ export default function EventDetailPage() {
                 {/* Lessons */}
                 {!draft.isCancelled && (
                     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
-                        <div style={{ marginBottom: 14 }}>
+                        <div style={{ marginBottom: templates.length > 0 ? 10 : 14 }}>
                             <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Lessons</p>
                         </div>
+
+                        {templates.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid var(--border)" }}>
+                                <span style={{ fontSize: 11, color: "var(--text-tertiary)", alignSelf: "center", marginRight: 2 }}>Templates:</span>
+                                {templates.map((tmpl) => (
+                                    <button
+                                        key={tmpl._id}
+                                        type="button"
+                                        onClick={() => applyTemplate(tmpl)}
+                                        style={{
+                                            fontSize: 12, padding: "4px 10px", borderRadius: 6,
+                                            border: "1px solid var(--border)", background: "var(--surface-raised)",
+                                            color: "var(--accent-text)", cursor: "pointer", fontWeight: 500,
+                                        }}
+                                    >
+                                        {tmpl.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         {draft.lessons.length === 0 && (
                             <p style={{ fontSize: 13, color: "var(--text-tertiary)", textAlign: "center", padding: "12px 0 4px" }}>

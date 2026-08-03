@@ -19,6 +19,7 @@ const NAV = [
     { href: "/venues", label: "Venues", icon: "🏠", section: "Scheduling" },
     { href: "/event-types", label: "Event Types", icon: "📅", section: null },
     { href: "/frequencies", label: "Frequencies", icon: "🔁", section: null },
+    { href: "/event-templates", label: "Event Templates", icon: "📝", section: null },
     { href: "/generate-events", label: "Generate Events", icon: "⚡", section: null },
     { href: "/add-event", label: "Add Special Event", icon: "✦", section: null },
     { href: "/lesson-overview", label: "Lesson Overview", icon: "📋", section: null },

@@ -11,6 +11,8 @@ interface DanceHit { _id: string; danceName: string; stepsheet: string | null; d
 interface LessonDraft { id: string; time: string; danceId: string | null; dance: string; level: string; link: string }
 interface EventTypeMeta { _id: string; title: string; level: string; price: string; venueId?: string }
 interface VenueMeta { _id: string; name: string; address?: string | null; city?: string | null; state?: string | null }
+interface TemplateLesson { time: string | null; dance: string | null; level: string | null; link: string | null }
+interface EventTemplate { _id: string; name: string; isDefault: boolean; lessons: TemplateLesson[] }
 
 function uid() { return Math.random().toString(16).slice(2) + Date.now().toString(16); }
 function trim(v: string | null | undefined) { return (v ?? "").trim(); }
@@ -137,6 +139,7 @@ function PlanLessonInner() {
     const [eventType, setEventType] = useState<EventTypeMeta | null>(null);
     const [venue, setVenue] = useState<VenueMeta | null>(null);
     const [metaLoading, setMetaLoading] = useState(false);
+    const [templates, setTemplates] = useState<EventTemplate[]>([]);
 
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState<string | null>(null);
@@ -145,17 +148,25 @@ function PlanLessonInner() {
     useEffect(() => {
         if (!eventTypeId) return;
         setMetaLoading(true);
-        fetch(`/api/admin/bld/event-types/${eventTypeId}`)
-            .then((r) => r.json())
-            .then(async (et) => {
-                setEventType(et);
-                if (et?.venueId) {
-                    const v = await fetch(`/api/admin/bld/venues/${et.venueId}`).then((r) => r.json()).catch(() => null);
-                    setVenue(v ?? null);
-                }
-            })
-            .catch(() => setEventType(null))
-            .finally(() => setMetaLoading(false));
+        Promise.all([
+            fetch(`/api/admin/bld/event-types/${eventTypeId}`).then((r) => r.json()).catch(() => null),
+            fetch(`/api/admin/bld/event-templates?eventTypeId=${eventTypeId}`).then((r) => r.json()).catch(() => []),
+        ]).then(async ([et, tmpls]) => {
+            setEventType(et ?? null);
+            const tmplList: EventTemplate[] = Array.isArray(tmpls) ? tmpls : [];
+            setTemplates(tmplList);
+            const def = tmplList.find((t) => t.isDefault);
+            if (def) {
+                setLessons(def.lessons.map((l) => ({
+                    id: uid(), time: l.time ?? "", danceId: null,
+                    dance: l.dance ?? "", level: l.level ?? "", link: l.link ?? "",
+                })));
+            }
+            if (et?.venueId) {
+                const v = await fetch(`/api/admin/bld/venues/${et.venueId}`).then((r) => r.json()).catch(() => null);
+                setVenue(v ?? null);
+            }
+        }).finally(() => setMetaLoading(false));
     }, [eventTypeId]);
 
     useEffect(() => { if (isCancelled) { setHasSubstitute(false); setSubstituteName(""); } }, [isCancelled]);
@@ -185,6 +196,13 @@ function PlanLessonInner() {
     }
     function removeLesson(id: string) {
         setLessons((prev) => prev.filter((l) => l.id !== id));
+    }
+
+    function applyTemplate(tmpl: EventTemplate) {
+        setLessons(tmpl.lessons.map((l) => ({
+            id: uid(), time: l.time ?? "", danceId: null,
+            dance: l.dance ?? "", level: l.level ?? "", link: l.link ?? "",
+        })));
     }
 
     async function save() {
@@ -265,7 +283,7 @@ function PlanLessonInner() {
 
                 {/* Date & time */}
                 <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Date: <strong style={{ color: "var(--text-primary)" }}>{date}</strong></p>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Date: <strong style={{ color: "var(--text-primary)" }}>{(() => { const [y, m, d] = date.split("-").map(Number); const dow = new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "long" }); return `${dow}, ${date}`; })()}</strong></p>
                     <div className="grid-2" style={{ gap: 10 }}>
                         <Field label="Start time">
                             <input value={startTime} onChange={(e) => setStartTime(e.target.value)} placeholder="6:00 PM" style={inputStyle} />
@@ -321,6 +339,26 @@ function PlanLessonInner() {
                             </div>
                             <ActionButton label="+ Add lesson" onClick={addLesson} variant="ghost" />
                         </div>
+
+                        {templates.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingBottom: 4, borderBottom: "1px solid var(--border)" }}>
+                                <span style={{ fontSize: 11, color: "var(--text-tertiary)", alignSelf: "center", marginRight: 2 }}>Templates:</span>
+                                {templates.map((tmpl) => (
+                                    <button
+                                        key={tmpl._id}
+                                        type="button"
+                                        onClick={() => applyTemplate(tmpl)}
+                                        style={{
+                                            fontSize: 12, padding: "4px 10px", borderRadius: 6,
+                                            border: "1px solid var(--border)", background: "var(--surface-raised)",
+                                            color: "var(--accent-text)", cursor: "pointer", fontWeight: 500,
+                                        }}
+                                    >
+                                        {tmpl.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         {lessons.map((l, idx) => (
                             <div key={l.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
