@@ -140,6 +140,7 @@ function PlanLessonInner() {
 
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState<string | null>(null);
+    const [savedEventId, setSavedEventId] = useState<string | null>(null);
 
     useEffect(() => {
         if (!eventTypeId) return;
@@ -206,7 +207,8 @@ function PlanLessonInner() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error ?? "Save failed");
-            router.push(`/events/${data.eventId}`);
+            setSavedEventId(data.eventId);
+            setTimeout(() => router.back(), 1500);
         } catch (e: unknown) {
             setErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -215,6 +217,26 @@ function PlanLessonInner() {
     }
 
     const venueLine = venue ? [venue.name, venue.address, venue.city, venue.state].filter(Boolean).join(", ") : null;
+    const eventTitle = eventType?.title ?? sp.get("title") ?? "Event";
+
+    if (savedEventId) {
+        return (
+            <div className="page-pad" style={{ maxWidth: 760 }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: "60px 20px", textAlign: "center" }}>
+                    <div style={{ fontSize: 40 }}>✓</div>
+                    <div>
+                        <p style={{ fontSize: 18, fontWeight: 700, color: "var(--success-text)" }}>Plan saved!</p>
+                        <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 6 }}>{eventTitle} · {date}</p>
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Returning to dashboard…</p>
+                    <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                        <ActionButton label="Back to Dashboard" onClick={() => router.back()} />
+                        <ActionButton label="Open Event" variant="ghost" onClick={() => router.push(`/events/${savedEventId}`)} />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="page-pad" style={{ maxWidth: 760 }}>
