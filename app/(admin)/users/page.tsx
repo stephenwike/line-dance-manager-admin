@@ -8,7 +8,14 @@ interface User {
     email: string | null;
     name: string | null;
     createdAt: string | null;
+    lastLogins: Record<string, { at: string; provider: string }>;
 }
+
+const APP_LABELS: Record<string, string> = {
+    "Dance Folly Website": "Website",
+    "DanceCard DJ Feed": "DJ Feed",
+    "ldco-auth": "Auth (direct)",
+};
 
 function RemoveButton({ userId, onRemoved }: { userId: string; onRemoved: () => void }) {
     const [confirming, setConfirming] = useState(false);
@@ -155,6 +162,13 @@ export default function UsersPage() {
                                     <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>
                                         Joined {fmt(u.createdAt)}
                                     </p>
+                                    {Object.keys(u.lastLogins).length > 0 && (
+                                        <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                                            {Object.entries(u.lastLogins).map(([app, { at }]) =>
+                                                `${APP_LABELS[app] ?? app}: ${fmt(at)}`
+                                            ).join(" · ")}
+                                        </p>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -164,7 +178,7 @@ export default function UsersPage() {
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                                 <thead>
                                     <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                                        {["Name", "Email", "Joined", ""].map((h, i) => (
+                                        {["Name", "Email", "Joined", "Last Login", ""].map((h, i) => (
                                             <th key={i} style={{
                                                 padding: "10px 16px", textAlign: "left",
                                                 fontWeight: 600, color: "var(--text-secondary)",
@@ -177,7 +191,7 @@ export default function UsersPage() {
                                 <tbody>
                                     {filtered.length === 0 && (
                                         <tr>
-                                            <td colSpan={4} style={{ padding: "24px 16px", color: "var(--text-tertiary)", textAlign: "center" }}>
+                                            <td colSpan={5} style={{ padding: "24px 16px", color: "var(--text-tertiary)", textAlign: "center" }}>
                                                 No users found
                                             </td>
                                         </tr>
@@ -192,6 +206,21 @@ export default function UsersPage() {
                                             </td>
                                             <td style={{ padding: "12px 16px", color: "var(--text-tertiary)" }}>
                                                 {fmt(u.createdAt)}
+                                            </td>
+                                            <td style={{ padding: "12px 16px", color: "var(--text-tertiary)", fontSize: 12 }}>
+                                                {Object.keys(u.lastLogins).length === 0 ? "—" : (
+                                                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                                        {Object.entries(u.lastLogins).map(([app, { at, provider }]) => (
+                                                            <span key={app}>
+                                                                <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>{APP_LABELS[app] ?? app}:</span>
+                                                                {" "}{fmt(at)}
+                                                                {provider && provider !== "sso" && (
+                                                                    <span style={{ color: "var(--text-tertiary)", fontStyle: "italic" }}> · {provider}</span>
+                                                                )}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td style={{ padding: "12px 16px", textAlign: "right" }}>
                                                 <RemoveButton userId={u._id} onRemoved={() => onRemoved(u._id)} />

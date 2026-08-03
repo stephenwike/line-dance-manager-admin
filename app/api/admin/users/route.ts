@@ -7,15 +7,35 @@ export async function GET() {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const db = await getMainDb();
-    const docs = await db.collection("users")
-        .find({})
-        .sort({ createdAt: -1 })
-        .toArray();
+
+    const [docs, loginAgg] = await Promise.all([
+        db.collection("users").find({}).sort({ createdAt: -1 }).toArray(),
+        db.collection("login_events").aggregate([
+            { $sort: { createdAt: -1 } },
+            { $group: {
+                _id: { userId: "$userId", app: "$app" },
+                lastLoginAt: { $first: "$createdAt" },
+                provider: { $first: "$provider" },
+            }},
+        ]).toArray(),
+    ]);
+
+    // Build map: userId → { app → { at, provider } }
+    const loginMap = new Map<string, Record<string, { at: string; provider: string }>>();
+    for (const e of loginAgg) {
+        const uid = String(e._id.userId);
+        if (!loginMap.has(uid)) loginMap.set(uid, {});
+        loginMap.get(uid)![String(e._id.app)] = {
+            at: new Date(e.lastLoginAt).toISOString(),
+            provider: String(e.provider ?? ""),
+        };
+    }
 
     return NextResponse.json(docs.map((u) => ({
         _id: String(u._id),
         email: u.email ?? null,
         name: u.name ?? null,
         createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : null,
+        lastLogins: loginMap.get(String(u._id)) ?? {},
     })));
 }
