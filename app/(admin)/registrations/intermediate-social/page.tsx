@@ -33,6 +33,8 @@ interface Registration {
 
 const EVENT_DATE = "Saturday, September 12, 2026";
 const EVENT_SHORT = "Sep 12";
+const NEW_EVENT_DATE = "Saturday, September 19, 2026";
+const NEW_EVENT_SHORT = "Sep 19";
 
 interface EmailTemplate {
     id: string;
@@ -61,6 +63,39 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
         body: (name) => `Hi ${name},\n\nJust a reminder that the LDCO Intermediate Line Dance Social is coming up!\n\nDate: ${EVENT_DATE}\nLocation: [VENUE]\nTime: [TIME]\n\nLooking forward to seeing you there!\n\nStephen`,
     },
     {
+        id: "venue-change",
+        label: "Venue & Date Change",
+        subject: `Important Update — Venue & Date Change | Int LD Social ${NEW_EVENT_SHORT}`,
+        body: (name) => `Hello ${name},
+
+I have an important update about the Intermediate Line Dance Social.
+
+The Denver Turnverein recently experienced a small fire and the venue is currently closed for repairs. We don't yet know when it will reopen, so I've made the decision to relocate our event.
+
+New Venue:
+Midnight Toad
+5302 S Federal Cir # A
+Littleton, CO 80123
+
+Finding and securing a new venue on short notice took a little longer than expected, so I've also pushed the date back one week:
+
+${NEW_EVENT_DATE}
+12:00 PM – 4:00 PM
+
+If this new date or location no longer works for you, I completely understand — please just reply to this email and I'll issue a full refund right away, no questions asked.
+
+On a brighter note, you now have one more week to submit your dance requests! Update your top 10 picks by September 5th, and the Guaranteed Dance List will be published the following day.
+
+To update your requests:
+  • Sign in at beyondlinedance.com and update your list from the home page
+  • Or email your picks directly to stephen.c.wise@gmail.com
+
+Thank you so much for your patience and understanding. I'm looking forward to a great event at the new location!
+
+Best,
+Stephen`,
+    },
+    {
         id: "custom",
         label: "Custom",
         subject: `LDCO Int LD Social — ${EVENT_SHORT}`,
@@ -76,12 +111,82 @@ function templateLabel(id: string) {
     return EMAIL_TEMPLATES.find((t) => t.id === id)?.label ?? id;
 }
 
+function EmailPreviewModal({ template, onClose }: { template: EmailTemplate; onClose: () => void }) {
+    const sampleName = "Laurie";
+    const body = template.body(sampleName);
+
+    return (
+        <div
+            onClick={onClose}
+            style={{
+                position: "fixed", inset: 0, zIndex: 1000,
+                background: "rgba(0,0,0,0.5)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: 16,
+            }}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    background: "var(--surface)", borderRadius: 12,
+                    border: "1px solid var(--border)",
+                    width: "100%", maxWidth: 560,
+                    maxHeight: "85vh", display: "flex", flexDirection: "column",
+                    overflow: "hidden",
+                    boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+                }}
+            >
+                <div style={{
+                    padding: "16px 20px",
+                    borderBottom: "1px solid var(--border)",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                }}>
+                    <div>
+                        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-tertiary)", marginBottom: 4 }}>
+                            Preview · {template.label}
+                        </p>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+                            {template.subject}
+                        </p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            padding: "4px 10px", borderRadius: 6,
+                            border: "1px solid var(--border)", background: "transparent",
+                            color: "var(--text-secondary)", fontSize: 13, cursor: "pointer",
+                        }}
+                    >
+                        Close
+                    </button>
+                </div>
+                <div style={{ padding: "20px", overflowY: "auto" }}>
+                    <pre style={{
+                        margin: 0, fontFamily: "inherit", fontSize: 13,
+                        color: "var(--text-primary)", whiteSpace: "pre-wrap",
+                        lineHeight: 1.65,
+                    }}>
+                        {body}
+                    </pre>
+                </div>
+                <div style={{
+                    padding: "10px 20px", borderTop: "1px solid var(--border)",
+                    fontSize: 11, color: "var(--text-tertiary)",
+                }}>
+                    Sample name: "{sampleName}" — close to dismiss
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function IntermediateSocialRegistrations() {
     const [registrations, setRegistrations] = useState<Registration[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [tab, setTab] = useState<Tab>("registered");
     const [pending, setPending] = useState<Record<string, string>>({});
+    const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null);
 
     async function load() {
         setLoading(true);
@@ -150,14 +255,39 @@ export default function IntermediateSocialRegistrations() {
 
     return (
         <div className="page-pad">
+            {previewTemplate && (
+                <EmailPreviewModal template={previewTemplate} onClose={() => setPreviewTemplate(null)} />
+            )}
             {/* Header */}
-            <div style={{ marginBottom: 24 }}>
-                <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>
-                    Int LD Social
-                </h1>
-                <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 4 }}>
-                    Intermediate Line Dance Social · Sep 12, 2026
-                </p>
+            <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                    <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>
+                        Int LD Social
+                    </h1>
+                    <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 4 }}>
+                        Intermediate Line Dance Social · Sep 12, 2026
+                    </p>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Preview:</span>
+                    {EMAIL_TEMPLATES.filter(t => t.id !== "custom").map(t => (
+                        <button
+                            key={t.id}
+                            onClick={() => setPreviewTemplate(t)}
+                            style={{
+                                fontSize: 12, fontWeight: 500,
+                                padding: "5px 12px", borderRadius: 8,
+                                border: "1px dashed var(--border)",
+                                background: "transparent",
+                                color: "var(--text-tertiary)",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                            }}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {loading && <p style={{ color: "var(--text-secondary)" }}>Loading…</p>}
