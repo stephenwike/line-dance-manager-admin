@@ -43,7 +43,7 @@ export async function GET(req: Request) {
             .filter(Boolean) as string[];
         const trackById = new Map<string, { name: string; artists: string[]; duration_ms?: number }>();
         if (trackIds.length > 0) {
-            const tracks = await db.collection("tracks")
+            const tracks = await db.collection<{ _id: string; name: string; artists: string[]; duration_ms?: number }>("tracks")
                 .find({ _id: { $in: trackIds } })
                 .project({ name: 1, artists: 1, duration_ms: 1 })
                 .toArray();
