@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
 type AttendeeStatus = "registered" | "approved" | "waitlisted" | "removed";
-type Tab = "registered" | "guestlist" | "waitlist";
+type Tab = "registered" | "guestlist" | "waitlist" | "removed";
 
 interface EmailRecord {
     templateId: string;
@@ -91,6 +91,28 @@ To update your requests:
   • Or email your picks directly to stephen.c.wise@gmail.com
 
 Thank you so much for your patience and understanding. I'm looking forward to a great event at the new location!
+
+Best,
+Stephen`,
+    },
+    {
+        id: "requests-deadline",
+        label: "Requests Deadline",
+        subject: `Last Day for Dance Requests — Int LD Social ${NEW_EVENT_SHORT}`,
+        body: (name) => `Hello ${name},
+
+Just a quick reminder — today is the last day to submit or update your dance requests for the Intermediate Line Dance Social on ${NEW_EVENT_DATE}!
+
+You may submit up to 10 requests. I'll be putting together the Guaranteed Dance List tomorrow, so make sure your picks are in by end of day.
+
+To submit or update your requests, you have two options:
+
+  1. Reply directly to this email with your list
+  2. Sign in at beyondlinedance.com using the same email you registered with, then click the Update Requests button on the home page
+
+If you don't have an account yet, you can create one — just use the same email address you registered with and you'll be linked up automatically.
+
+Looking forward to a great event — see you on the dance floor!
 
 Best,
 Stephen`,
@@ -246,11 +268,13 @@ export default function IntermediateSocialRegistrations() {
     const registered = registrations.filter(r => r.attendeeStatus === "registered");
     const guestlist = registrations.filter(r => r.attendeeStatus === "approved");
     const waitlist = registrations.filter(r => r.attendeeStatus === "waitlisted");
+    const removed = registrations.filter(r => r.attendeeStatus === "removed");
 
     const tabs: { key: Tab; label: string; count: number }[] = [
         { key: "registered", label: "Registered", count: registered.length },
         { key: "guestlist", label: "Guestlist", count: guestlist.length },
         { key: "waitlist", label: "Waitlist", count: waitlist.length },
+        { key: "removed", label: "Removed", count: removed.length },
     ];
 
     return (
@@ -259,16 +283,17 @@ export default function IntermediateSocialRegistrations() {
                 <EmailPreviewModal template={previewTemplate} onClose={() => setPreviewTemplate(null)} />
             )}
             {/* Header */}
-            <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                    <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>
-                        Int LD Social
-                    </h1>
-                    <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 4 }}>
-                        Intermediate Line Dance Social · Sep 12, 2026
-                    </p>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <div style={{ marginBottom: 24 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
+                    Int LD Social
+                </h1>
+                <p style={{ fontSize: 13, color: "var(--text-tertiary)", margin: 0 }}>
+                    Intermediate Line Dance Social
+                </p>
+                <p style={{ fontSize: 13, color: "var(--text-tertiary)", margin: "2px 0 0" }}>
+                    September 19, 2026 · The Midnight Toad, 5302 S Federal Cir #A, Littleton CO
+                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
                     <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Preview:</span>
                     {EMAIL_TEMPLATES.filter(t => t.id !== "custom").map(t => (
                         <button
@@ -276,7 +301,7 @@ export default function IntermediateSocialRegistrations() {
                             onClick={() => setPreviewTemplate(t)}
                             style={{
                                 fontSize: 12, fontWeight: 500,
-                                padding: "5px 12px", borderRadius: 8,
+                                padding: "4px 10px", borderRadius: 6,
                                 border: "1px dashed var(--border)",
                                 background: "transparent",
                                 color: "var(--text-tertiary)",
@@ -446,6 +471,23 @@ export default function IntermediateSocialRegistrations() {
                                 />
                             )}
                             emptyMessage="No one on the waitlist."
+                        />
+                    )}
+
+                    {tab === "removed" && (
+                        <RegistrationTable
+                            rows={removed}
+                            pending={pending}
+                            onEmailLogged={onEmailLogged}
+                            actions={(r, mobile) => (
+                                <ActionButton
+                                    label="Restore"
+                                    loading={pending[r._id] === "registered"}
+                                    onClick={() => setStatus(r._id, "registered")}
+                                    style={{ color: "var(--text-secondary)", border: "1px solid var(--border)", background: "transparent", ...(mobile ? { width: "100%", padding: "10px 0" } : {}) }}
+                                />
+                            )}
+                            emptyMessage="No removed attendees."
                         />
                     )}
                 </>

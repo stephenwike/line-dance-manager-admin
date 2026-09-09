@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface TallyEntry {
     key: string;
@@ -8,6 +8,9 @@ interface TallyEntry {
     displayName: string;
     count: number;
     requestors: string[];
+    songName: string | null;
+    songArtist: string | null;
+    durationMs: number | null;
 }
 
 interface TallyData {
@@ -18,11 +21,203 @@ interface TallyData {
     dances: TallyEntry[];
 }
 
+function EditableEntryName({
+    entry,
+    eventSlug,
+    onRenamed,
+    onLinked,
+}: {
+    entry: TallyEntry;
+    eventSlug: string;
+    onRenamed: (key: string, newName: string) => void;
+    onLinked: (key: string, danceId: string, danceName: string) => void;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [value, setValue] = useState(entry.displayName);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [searchResults, setSearchResults] = useState<{ id: string; danceName: string }[]>([]);
+    const [searching, setSearching] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+    const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    function startEdit() {
+        setValue(entry.displayName);
+        setSearchResults([]);
+        setSaveError(null);
+        setEditing(true);
+        setTimeout(() => inputRef.current?.select(), 0);
+    }
+
+    function cancel() {
+        setEditing(false);
+        setSearchResults([]);
+        setSaveError(null);
+    }
+
+    function handleEnter() {
+        // If search results are showing, link to the first one
+        if (searchResults.length > 0) {
+            linkToDance(searchResults[0]);
+        } else {
+            saveRename();
+        }
+    }
+
+    async function saveRename() {
+        const trimmed = value.trim();
+        if (!trimmed || trimmed === entry.displayName) { cancel(); return; }
+        setSaving(true);
+        setSaveError(null);
+        try {
+            const res = await fetch("/api/admin/registrations/tally", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ event: eventSlug, fromText: entry.displayName, toText: trimmed }),
+            });
+            const data = await res.json();
+            if (res.ok && data.modifiedCount > 0) {
+                onRenamed(entry.key, trimmed);
+                cancel();
+            } else {
+                setSaveError(res.ok ? "No matching requests found to update." : (data.error ?? "Save failed."));
+            }
+        } catch {
+            setSaveError("Network error.");
+        } finally { setSaving(false); }
+    }
+
+    async function linkToDance(dance: { id: string; danceName: string }) {
+        setSaving(true);
+        setSaveError(null);
+        try {
+            const res = await fetch("/api/admin/registrations/tally", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ event: eventSlug, fromText: entry.displayName, danceId: dance.id, danceName: dance.danceName }),
+            });
+            const data = await res.json();
+            if (res.ok && data.modifiedCount > 0) {
+                onLinked(entry.key, dance.id, dance.danceName);
+                cancel();
+            } else {
+                setSaveError(res.ok ? "No matching requests found to update." : (data.error ?? "Save failed."));
+            }
+        } catch {
+            setSaveError("Network error.");
+        } finally { setSaving(false); }
+    }
+
+    function onSearchChange(q: string) {
+        if (searchTimer.current) clearTimeout(searchTimer.current);
+        if (!q.trim()) { setSearchResults([]); return; }
+        searchTimer.current = setTimeout(async () => {
+            setSearching(true);
+            try {
+                const res = await fetch(`/api/admin/dances/search?q=${encodeURIComponent(q)}`);
+                if (res.ok) setSearchResults(await res.json());
+            } finally { setSearching(false); }
+        }, 250);
+    }
+
+    if (editing) {
+        return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <div style={{ position: "relative" }}>
+                        <input
+                            ref={inputRef}
+                            value={value}
+                            onChange={e => { setValue(e.target.value); onSearchChange(e.target.value); }}
+                            onKeyDown={e => { if (e.key === "Enter") handleEnter(); if (e.key === "Escape") cancel(); }}
+                            disabled={saving}
+                            placeholder="Dance name…"
+                            style={{
+                                fontSize: 14, fontWeight: 500,
+                                padding: "3px 8px", borderRadius: 6,
+                                border: "1px solid var(--accent)",
+                                background: "var(--surface-raised)",
+                                color: "var(--text-primary)",
+                                outline: "none", width: 240,
+                            }}
+                        />
+                        {searching && (
+                            <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "var(--text-tertiary)" }}>…</span>
+                        )}
+                    </div>
+                    <button onClick={saveRename} disabled={saving} style={{
+                        fontSize: 12, padding: "3px 10px", borderRadius: 6,
+                        border: "1px solid var(--accent)", background: "var(--accent)",
+                        color: "#fff", cursor: saving ? "not-allowed" : "pointer", fontWeight: 600,
+                    }}>{saving ? "…" : "Save"}</button>
+                    <button onClick={cancel} disabled={saving} style={{
+                        fontSize: 12, padding: "3px 8px", borderRadius: 6,
+                        border: "1px solid var(--border)", background: "transparent",
+                        color: "var(--text-secondary)", cursor: "pointer",
+                    }}>Cancel</button>
+                    {saveError && (
+                        <span style={{ fontSize: 11, color: "var(--danger-text)" }}>{saveError}</span>
+                    )}
+                </div>
+
+                {searchResults.length > 0 && (
+                    <div style={{
+                        border: "1px solid var(--border)", borderRadius: 8,
+                        overflow: "hidden", background: "var(--surface)", maxWidth: 360,
+                    }}>
+                        {searchResults.map((d, i) => (
+                            <button
+                                key={d.id}
+                                onClick={() => linkToDance(d)}
+                                disabled={saving}
+                                style={{
+                                    display: "block", width: "100%", textAlign: "left",
+                                    padding: "7px 12px", border: "none",
+                                    borderBottom: i < searchResults.length - 1 ? "1px solid var(--border)" : "none",
+                                    background: "transparent",
+                                    color: "var(--text-primary)", fontSize: 13,
+                                    cursor: saving ? "not-allowed" : "pointer",
+                                }}
+                                onMouseOver={e => (e.currentTarget.style.background = "var(--surface-raised)")}
+                                onMouseOut={e => (e.currentTarget.style.background = "transparent")}
+                            >
+                                {d.danceName}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)" }}>
+                {entry.displayName}
+            </span>
+            {!entry.danceId && (
+                <button
+                    onClick={startEdit}
+                    title="Edit name or link to catalog"
+                    style={{
+                        background: "transparent", border: "none",
+                        cursor: "pointer", padding: "2px 4px",
+                        color: "var(--text-tertiary)", fontSize: 13,
+                        lineHeight: 1, borderRadius: 4,
+                    }}
+                >✎</button>
+            )}
+        </span>
+    );
+}
+
 export default function RequestTallyPage() {
     const [data, setData] = useState<TallyData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [removedData, setRemovedData] = useState<TallyData | null>(null);
+    const [showRemoved, setShowRemoved] = useState(false);
+    const [removedLoading, setRemovedLoading] = useState(false);
 
     useEffect(() => {
         fetch("/api/admin/registrations/tally?event=intermediate-social-2026-09-12")
@@ -35,25 +230,126 @@ export default function RequestTallyPage() {
             .finally(() => setLoading(false));
     }, []);
 
-    function toggleExpanded(key: string) {
-        setExpanded(prev => {
-            const next = new Set(prev);
-            next.has(key) ? next.delete(key) : next.add(key);
-            return next;
+    async function toggleRemoved() {
+        if (showRemoved) { setShowRemoved(false); return; }
+        setShowRemoved(true);
+        if (!removedData) {
+            setRemovedLoading(true);
+            try {
+                const res = await fetch("/api/admin/registrations/tally?event=intermediate-social-2026-09-12&removedOnly=true");
+                if (res.ok) setRemovedData(await res.json());
+            } finally { setRemovedLoading(false); }
+        }
+    }
+
+    function handleRenamed(key: string, newName: string) {
+        setData(prev => prev ? {
+            ...prev,
+            dances: prev.dances.map(d => d.key === key ? { ...d, displayName: newName } : d),
+        } : prev);
+    }
+
+    function handleLinked(key: string, danceId: string, danceName: string) {
+        setData(prev => {
+            if (!prev) return prev;
+            const newKey = `id:${danceId}`;
+            const existing = prev.dances.find(d => d.key === newKey);
+            const source = prev.dances.find(d => d.key === key);
+            if (!source) return prev;
+
+            if (existing) {
+                // Merge the newly linked entry into the existing linked entry
+                return {
+                    ...prev,
+                    dances: prev.dances
+                        .filter(d => d.key !== key)
+                        .map(d => d.key === newKey
+                            ? { ...d, count: d.count + source.count, requestors: [...d.requestors, ...source.requestors] }
+                            : d
+                        )
+                        .sort((a, b) => b.count - a.count || a.displayName.localeCompare(b.displayName)),
+                };
+            }
+
+            return {
+                ...prev,
+                dances: prev.dances
+                    .map(d => d.key === key ? { ...d, key: newKey, danceId, displayName: danceName } : d)
+                    .sort((a, b) => b.count - a.count || a.displayName.localeCompare(b.displayName)),
+            };
         });
     }
 
-    const maxCount = data?.dances[0]?.count ?? 1;
+    const [unlinkedOnly, setLinkedOnly] = useState(false);
+
+    const visibleDances = data
+        ? (unlinkedOnly ? data.dances.filter(d => !d.danceId) : data.dances)
+        : [];
+    const maxCount = visibleDances[0]?.count ?? 1;
+
+    function exportCsv() {
+        if (!data) return;
+        const sorted = [...data.dances].sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+        function cell(v: string | number | null) {
+            if (v === null || v === undefined) return "";
+            const s = String(v);
+            return s.includes(",") || s.includes('"') || s.includes("\n")
+                ? `"${s.replace(/"/g, '""')}"` : s;
+        }
+
+        function fmtDuration(ms: number | null) {
+            if (!ms) return "";
+            const totalSec = Math.round(ms / 1000);
+            return `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, "0")}`;
+        }
+
+        const rows = [
+            ["Dance", "Votes", "Song", "Artist", "Duration"],
+            ...sorted.map(d => [
+                cell(d.displayName),
+                d.count,
+                cell(d.songName),
+                cell(d.songArtist),
+                cell(fmtDuration(d.durationMs)),
+            ]),
+        ];
+        const csv = rows.map(r => r.join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "guaranteed-list.csv";
+        a.click();
+        URL.revokeObjectURL(url);
+    }
 
     return (
         <div className="page-pad">
-            <div style={{ marginBottom: 24 }}>
-                <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>
-                    Dance Request Tally
-                </h1>
-                <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 4 }}>
-                    Intermediate Line Dance Social · Sep 12, 2026
-                </p>
+            <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                    <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>
+                        Dance Request Tally
+                    </h1>
+                    <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 4 }}>
+                        Intermediate Line Dance Social · Sep 12, 2026
+                    </p>
+                </div>
+                {data && (
+                    <button
+                        onClick={exportCsv}
+                        style={{
+                            fontSize: 12, fontWeight: 600,
+                            padding: "7px 16px", borderRadius: 8,
+                            border: "1px solid var(--border)",
+                            background: "var(--surface)",
+                            color: "var(--text-secondary)",
+                            cursor: "pointer", whiteSpace: "nowrap",
+                        }}
+                    >
+                        ↓ Export guaranteed list
+                    </button>
+                )}
             </div>
 
             {loading && <p style={{ color: "var(--text-secondary)" }}>Loading…</p>}
@@ -62,14 +358,42 @@ export default function RequestTallyPage() {
             {data && (
                 <>
                     {/* Summary */}
-                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 28 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 28 }}>
                         <StatCard label="Total Registrations" value={data.totalRegistrations} />
                         <StatCard label="Submitted Requests" value={data.registrantsWithRequests} />
                         <StatCard label="Total Requests" value={data.totalRequests} />
                         <StatCard label="Unique Dances" value={data.dances.length} />
+                        <button
+                            onClick={() => setLinkedOnly(v => !v)}
+                            style={{
+                                fontSize: 12, fontWeight: 600,
+                                padding: "6px 14px", borderRadius: 8,
+                                border: `1px solid ${unlinkedOnly ? "var(--accent)" : "var(--border)"}`,
+                                background: unlinkedOnly ? "var(--accent-subtle)" : "transparent",
+                                color: unlinkedOnly ? "var(--accent-text)" : "var(--text-secondary)",
+                                cursor: "pointer", whiteSpace: "nowrap",
+                                alignSelf: "center",
+                            }}
+                        >
+                            {unlinkedOnly ? "✓ Unlinked only" : "Show unlinked only"}
+                        </button>
+                        <button
+                            onClick={toggleRemoved}
+                            style={{
+                                fontSize: 12, fontWeight: 600,
+                                padding: "6px 14px", borderRadius: 8,
+                                border: `1px solid ${showRemoved ? "rgba(239,68,68,0.4)" : "var(--border)"}`,
+                                background: showRemoved ? "var(--danger-subtle)" : "transparent",
+                                color: showRemoved ? "var(--danger-text)" : "var(--text-secondary)",
+                                cursor: "pointer", whiteSpace: "nowrap",
+                                alignSelf: "center",
+                            }}
+                        >
+                            {showRemoved ? "✓ Removed requests" : "Show removed requests"}
+                        </button>
                     </div>
 
-                    {data.dances.length === 0 ? (
+                    {visibleDances.length === 0 ? (
                         <div style={{
                             background: "var(--surface)",
                             border: "1px solid var(--border)",
@@ -88,27 +412,22 @@ export default function RequestTallyPage() {
                             borderRadius: 10,
                             overflow: "hidden",
                         }}>
-                            {data.dances.map((entry, i) => {
-                                const isExpanded = expanded.has(entry.key);
+                            {visibleDances.map((entry, i) => {
                                 const barPct = Math.round((entry.count / maxCount) * 100);
                                 return (
                                     <div
                                         key={entry.key}
                                         style={{
-                                            borderBottom: i < data.dances.length - 1 ? "1px solid var(--border)" : "none",
+                                            borderBottom: i < visibleDances.length - 1 ? "1px solid var(--border)" : "none",
+                                            padding: "14px 20px",
                                         }}
                                     >
-                                        {/* Main row */}
                                         <div style={{
                                             display: "grid",
                                             gridTemplateColumns: "2.5rem 1fr auto",
                                             alignItems: "center",
                                             gap: 16,
-                                            padding: "14px 20px",
-                                            cursor: "pointer",
-                                        }}
-                                            onClick={() => toggleExpanded(entry.key)}
-                                        >
+                                        }}>
                                             {/* Rank */}
                                             <div style={{
                                                 fontSize: 13,
@@ -119,12 +438,15 @@ export default function RequestTallyPage() {
                                                 #{i + 1}
                                             </div>
 
-                                            {/* Name + bar */}
+                                            {/* Name + bar + requestors */}
                                             <div>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                                                    <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)" }}>
-                                                        {entry.displayName}
-                                                    </span>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                                                    <EditableEntryName
+                                                        entry={entry}
+                                                        eventSlug={data.eventSlug}
+                                                        onRenamed={handleRenamed}
+                                                        onLinked={handleLinked}
+                                                    />
                                                     {entry.danceId && (
                                                         <span style={{
                                                             fontSize: 10,
@@ -143,6 +465,7 @@ export default function RequestTallyPage() {
                                                     borderRadius: 3,
                                                     overflow: "hidden",
                                                     maxWidth: 400,
+                                                    marginBottom: 8,
                                                 }}>
                                                     <div style={{
                                                         height: "100%",
@@ -152,59 +475,105 @@ export default function RequestTallyPage() {
                                                         transition: "width 0.4s ease",
                                                     }} />
                                                 </div>
+                                                {/* Requestors */}
+                                                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                                                    {entry.requestors.map((name, j) => (
+                                                        <span key={j} style={{
+                                                            fontSize: 11,
+                                                            padding: "2px 8px",
+                                                            borderRadius: 20,
+                                                            background: "var(--surface-raised)",
+                                                            border: "1px solid var(--border)",
+                                                            color: "var(--text-secondary)",
+                                                        }}>
+                                                            {name}
+                                                        </span>
+                                                    ))}
+                                                </div>
                                             </div>
 
-                                            {/* Count + toggle */}
-                                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                                <div style={{ textAlign: "right" }}>
-                                                    <span style={{
-                                                        fontSize: 22,
-                                                        fontWeight: 800,
-                                                        color: i === 0 ? "var(--accent-text)" : "var(--text-primary)",
-                                                        lineHeight: 1,
-                                                    }}>
-                                                        {entry.count}
-                                                    </span>
-                                                    <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 2 }}>
-                                                        {entry.count === 1 ? "request" : "requests"}
-                                                    </div>
-                                                </div>
+                                            {/* Count */}
+                                            <div style={{ textAlign: "right" }}>
                                                 <span style={{
-                                                    fontSize: 12,
-                                                    color: "var(--text-tertiary)",
-                                                    transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                                                    display: "inline-block",
-                                                    transition: "transform 0.2s",
-                                                    userSelect: "none",
-                                                }}>▾</span>
+                                                    fontSize: 22,
+                                                    fontWeight: 800,
+                                                    color: i === 0 ? "var(--accent-text)" : "var(--text-primary)",
+                                                    lineHeight: 1,
+                                                }}>
+                                                    {entry.count}
+                                                </span>
+                                                <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 2 }}>
+                                                    {entry.count === 1 ? "request" : "requests"}
+                                                </div>
                                             </div>
                                         </div>
-
-                                        {/* Expanded: requestors list */}
-                                        {isExpanded && (
-                                            <div style={{
-                                                padding: "0 20px 14px 72px",
-                                                display: "flex",
-                                                flexWrap: "wrap",
-                                                gap: 6,
-                                            }}>
-                                                {entry.requestors.map((name, j) => (
-                                                    <span key={j} style={{
-                                                        fontSize: 12,
-                                                        padding: "3px 10px",
-                                                        borderRadius: 20,
-                                                        background: "var(--surface-raised)",
-                                                        border: "1px solid var(--border)",
-                                                        color: "var(--text-secondary)",
-                                                    }}>
-                                                        {name}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
                                     </div>
                                 );
                             })}
+                        </div>
+                    )}
+
+                    {/* Removed requests section */}
+                    {showRemoved && (
+                        <div style={{ marginTop: 32 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                                <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--danger-text)", margin: 0 }}>
+                                    Removed Attendees' Requests
+                                </h2>
+                                {removedData && (
+                                    <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                                        {removedData.totalRegistrations} removed · {removedData.totalRequests} requests
+                                    </span>
+                                )}
+                            </div>
+                            {removedLoading && <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>Loading…</p>}
+                            {removedData && removedData.dances.length === 0 && (
+                                <p style={{ color: "var(--text-tertiary)", fontSize: 13 }}>No requests from removed attendees.</p>
+                            )}
+                            {removedData && removedData.dances.length > 0 && (
+                                <div style={{
+                                    background: "var(--surface)",
+                                    border: "1px solid rgba(239,68,68,0.25)",
+                                    borderRadius: 10,
+                                    overflow: "hidden",
+                                    opacity: 0.85,
+                                }}>
+                                    {removedData.dances.map((entry, i) => (
+                                        <div
+                                            key={entry.key}
+                                            style={{
+                                                borderBottom: i < removedData.dances.length - 1 ? "1px solid var(--border)" : "none",
+                                                padding: "12px 20px",
+                                                display: "grid",
+                                                gridTemplateColumns: "1fr auto",
+                                                alignItems: "center",
+                                                gap: 16,
+                                            }}
+                                        >
+                                            <div>
+                                                <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", textDecoration: "line-through" }}>
+                                                    {entry.displayName}
+                                                </span>
+                                                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                                                    {entry.requestors.map((name, j) => (
+                                                        <span key={j} style={{
+                                                            fontSize: 11, padding: "2px 8px", borderRadius: 20,
+                                                            background: "var(--danger-subtle)",
+                                                            border: "1px solid rgba(239,68,68,0.2)",
+                                                            color: "var(--danger-text)",
+                                                        }}>
+                                                            {name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <span style={{ fontSize: 18, fontWeight: 700, color: "var(--text-tertiary)" }}>
+                                                {entry.count}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
                 </>
