@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     const danceInfoById = new Map<string, DanceInfo>();
 
     if (danceIds.size > 0) {
-        const dances = await db.collection("dances")
+        const dances = await db.collection<{ _id: string; danceName: string; primaryTrack?: string; tracks?: string[] }>("dances")
             .find({ _id: { $in: Array.from(danceIds) } })
             .project({ danceName: 1, primaryTrack: 1, tracks: 1 })
             .toArray();
