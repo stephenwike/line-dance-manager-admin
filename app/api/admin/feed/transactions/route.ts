@@ -4,27 +4,33 @@ import { getFeedDb } from "@/lib/db";
 import { resolveUserNames } from "@/lib/feedUsers";
 
 // txType values:
-//   "purchase"   → beat_transactions  type=purchase  (attendee buys beats with cash)
-//   "beat_tip"   → beat_transactions  type=tip       (attendee spends beats to tip DJ)
-//                + dj_wallet_transactions type=beat_tip (DJ receives credit for that tip)
-//   "direct_tip" → dj_wallet_transactions type=direct_tip (cash tip straight to DJ)
-type TxTypeFilter = "purchase" | "beat_tip" | "direct_tip";
+//   "purchase"         → beat_transactions  type=purchase  (attendee buys beats with cash)
+//   "beat_tip"         → beat_transactions  type=tip       (attendee spends beats to tip DJ)
+//                      + dj_wallet_transactions type=beat_tip (DJ receives credit for that tip)
+//   "direct_tip"       → dj_wallet_transactions type=direct_tip (cash tip straight to DJ)
+//   "session_purchase" → session_transactions type=session_purchase (DJ pays for a session)
+type TxTypeFilter = "purchase" | "beat_tip" | "direct_tip" | "session_purchase";
 
 const KNOWN_BEAT_TYPES = ["purchase", "tip"];
 const KNOWN_WALLET_TYPES = ["direct_tip", "beat_tip"];
 
 function beatQuery(txType: TxTypeFilter | null) {
-    if (txType === "direct_tip") return null;
+    if (txType === "direct_tip" || txType === "session_purchase") return null;
     if (txType === "purchase") return { type: "purchase" };
     if (txType === "beat_tip") return { type: "tip" };
     return { type: { $in: KNOWN_BEAT_TYPES } };
 }
 
 function walletQuery(txType: TxTypeFilter | null) {
-    if (txType === "purchase") return null;
+    if (txType === "purchase" || txType === "session_purchase") return null;
     if (txType === "direct_tip") return { type: "direct_tip" };
     if (txType === "beat_tip") return { type: "beat_tip" };
     return { type: { $in: KNOWN_WALLET_TYPES } };
+}
+
+function sessionQuery(txType: TxTypeFilter | null) {
+    if (txType === "session_purchase" || txType === null) return {};
+    return null;
 }
 
 type BeatDoc = {
@@ -36,6 +42,11 @@ type WalletDoc = {
     _id?: object; ownerId?: string; type?: string;
     amountCents?: number; attendeeId?: string; requestId?: string;
     stripeSessionId?: string; senderName?: string; senderEmail?: string; createdAt?: Date;
+};
+type SessionDoc = {
+    _id?: object; ownerId?: string; type?: string;
+    amountCents?: number; durationMinutes?: number; sessionName?: string; sessionId?: string;
+    stripeSessionId?: string; stripePaymentIntentId?: string; createdAt?: Date;
 };
 
 export async function GET(req: Request) {
@@ -53,18 +64,23 @@ export async function GET(req: Request) {
     const db = await getFeedDb();
     const bq = beatQuery(txType);
     const wq = walletQuery(txType);
+    const sq = sessionQuery(txType);
 
-    const [beatDocs, walletDocs, beatPurchaseTotal, beatTipTotal, directTipTotal, beatTipWalletTotal] = await Promise.all([
+    const [beatDocs, walletDocs, sessionDocs, beatPurchaseTotal, beatTipTotal, directTipTotal, beatTipWalletTotal, sessionPurchaseTotal] = await Promise.all([
         bq !== null
             ? db.collection("beat_transactions").find(bq).sort({ createdAt: -1 }).limit(limit).toArray()
             : Promise.resolve([]),
         wq !== null
             ? db.collection("dj_wallet_transactions").find(wq).sort({ createdAt: -1 }).limit(limit).toArray()
             : Promise.resolve([]),
+        sq !== null
+            ? db.collection("session_transactions").find(sq).sort({ createdAt: -1 }).limit(limit).toArray()
+            : Promise.resolve([]),
         db.collection("beat_transactions").countDocuments({ type: "purchase" }),
         db.collection("beat_transactions").countDocuments({ type: "tip" }),
         db.collection("dj_wallet_transactions").countDocuments({ type: "direct_tip" }),
         db.collection("dj_wallet_transactions").countDocuments({ type: "beat_tip" }),
+        db.collection("session_transactions").countDocuments({ type: "session_purchase" }),
     ]);
 
     const beats = (beatDocs as BeatDoc[]).map((t) => ({
@@ -95,7 +111,22 @@ export async function GET(req: Request) {
         createdAt: t.createdAt ?? null,
     }));
 
-    const merged = [...beats, ...wallet]
+    const sessions = (sessionDocs as SessionDoc[]).map((t) => ({
+        id: String(t._id),
+        txType: "session_purchase",
+        // session purchase: DJ (from) → platform (to)
+        fromId: t.ownerId ?? null,
+        toId: null,
+        beats: null,
+        amountCents: t.amountCents ?? null,
+        requestId: null,
+        stripeRef: t.stripeSessionId ?? t.stripePaymentIntentId ?? null,
+        createdAt: t.createdAt ?? null,
+        sessionName: t.sessionName ?? null,
+        durationMinutes: t.durationMinutes ?? null,
+    }));
+
+    const merged = [...beats, ...wallet, ...sessions]
         .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
         .slice(skip, skip + limit);
 
@@ -117,7 +148,8 @@ export async function GET(req: Request) {
             purchase: beatPurchaseTotal,
             beatTip: beatTipTotal + beatTipWalletTotal,
             directTip: directTipTotal,
-            combined: beatPurchaseTotal + beatTipTotal + beatTipWalletTotal + directTipTotal,
+            sessionPurchase: sessionPurchaseTotal,
+            combined: beatPurchaseTotal + beatTipTotal + beatTipWalletTotal + directTipTotal + sessionPurchaseTotal,
         },
     });
 }

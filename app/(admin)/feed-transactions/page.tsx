@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/ui";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
-type TxType = "purchase" | "beat_tip" | "direct_tip";
+type TxType = "purchase" | "beat_tip" | "direct_tip" | "session_purchase";
 
 interface Transaction {
     id: string;
@@ -19,12 +19,15 @@ interface Transaction {
     requestId: string | null;
     stripeRef: string | null;
     createdAt: string | null;
+    sessionName: string | null;
+    durationMinutes: number | null;
 }
 
 interface Totals {
     purchase: number;
     beatTip: number;
     directTip: number;
+    sessionPurchase: number;
     combined: number;
 }
 
@@ -33,17 +36,20 @@ const FILTER_OPTIONS: { value: "" | TxType; label: string; description: string }
     { value: "purchase", label: "Beat Purchases", description: "Attendees buying beats with cash" },
     { value: "beat_tip", label: "Beat Tips", description: "Beats spent to tip the DJ" },
     { value: "direct_tip", label: "Direct Tips", description: "Cash tips sent straight to the DJ" },
+    { value: "session_purchase", label: "Session Purchases", description: "DJs buying a session" },
 ];
 
 const TX_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-    purchase:   { label: "Beat Purchase", color: "#4f46e5", bg: "rgba(79,70,229,0.08)" },
-    beat_tip:   { label: "Beat Tip",      color: "#0891b2", bg: "rgba(8,145,178,0.08)" },
-    direct_tip: { label: "Direct Tip",    color: "#059669", bg: "rgba(5,150,105,0.08)" },
+    purchase:         { label: "Beat Purchase",     color: "#4f46e5", bg: "rgba(79,70,229,0.08)" },
+    beat_tip:         { label: "Beat Tip",          color: "#0891b2", bg: "rgba(8,145,178,0.08)" },
+    direct_tip:       { label: "Direct Tip",        color: "#059669", bg: "rgba(5,150,105,0.08)" },
+    session_purchase: { label: "Session Purchase",  color: "#d97706", bg: "rgba(217,119,6,0.08)" },
 };
 
 // Labels shown when a party is platform/unknown
 const TO_FALLBACK: Record<string, string> = {
     purchase: "Beat Balance",
+    session_purchase: "Session",
 };
 const FROM_FALLBACK: Record<string, string> = {
     direct_tip: "Guest",
@@ -146,6 +152,7 @@ export default function FeedTransactionsPage() {
         ? filter === "purchase" ? totals.purchase
         : filter === "beat_tip" ? totals.beatTip
         : filter === "direct_tip" ? totals.directTip
+        : filter === "session_purchase" ? totals.sessionPurchase
         : totals.combined
         : 0;
 
@@ -176,6 +183,7 @@ export default function FeedTransactionsPage() {
                         { label: "Beat Purchases", value: totals.purchase, color: "#4f46e5", sub: "Cash in from attendees", filter: "purchase" as TxType },
                         { label: "Beat Tips", value: totals.beatTip, color: "#0891b2", sub: "Beats spent + DJ credits", filter: "beat_tip" as TxType },
                         { label: "Direct Tips", value: totals.directTip, color: "#059669", sub: "Cash tips to DJs", filter: "direct_tip" as TxType },
+                        { label: "Session Purchases", value: totals.sessionPurchase, color: "#d97706", sub: "DJs buying sessions", filter: "session_purchase" as TxType },
                     ].map(({ label, value, color, sub, filter: f }) => (
                         <div key={label}
                             onClick={() => setFilter(filter === f ? "" : f)}
@@ -244,7 +252,9 @@ export default function FeedTransactionsPage() {
                         const amountStr = formatCents(tx.amountCents);
                         const isNegBeats = tx.beats !== null && tx.beats < 0;
                         const fromName = tx.fromName ?? (!tx.fromEmail ? FROM_FALLBACK[tx.txType] : null) ?? tx.fromEmail;
-                        const toName = tx.toName ?? TO_FALLBACK[tx.txType];
+                        const toName = tx.txType === "session_purchase" && tx.sessionName
+                            ? `${tx.sessionName}${tx.durationMinutes ? ` (${tx.durationMinutes}m)` : ""}`
+                            : (tx.toName ?? TO_FALLBACK[tx.txType]);
                         return (
                             <div key={tx.id} style={{
                                 background: "var(--surface)",
@@ -368,7 +378,9 @@ export default function FeedTransactionsPage() {
 
                                 <UserCell
                                     id={tx.toId}
-                                    name={tx.toName}
+                                    name={tx.txType === "session_purchase" && tx.sessionName
+                                        ? `${tx.sessionName}${tx.durationMinutes ? ` (${tx.durationMinutes}m)` : ""}`
+                                        : tx.toName}
                                     fallback={TO_FALLBACK[tx.txType]}
                                 />
 
