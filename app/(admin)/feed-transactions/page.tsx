@@ -21,6 +21,7 @@ interface Transaction {
     createdAt: string | null;
     sessionName: string | null;
     durationMinutes: number | null;
+    isFree?: boolean;
 }
 
 interface Totals {
@@ -267,7 +268,14 @@ export default function FeedTransactionsPage() {
                             }}>
                                 {/* Row 1: type chip + date */}
                                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                                    <TypeChip txType={tx.txType} />
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                        <TypeChip txType={tx.txType} />
+                                        {tx.isFree && (
+                                            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "rgba(148,163,184,0.15)", color: "var(--text-tertiary)" }}>
+                                                Beta
+                                            </span>
+                                        )}
+                                    </div>
                                     <span style={{ fontSize: 12, color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>
                                         {tx.createdAt
                                             ? new Date(tx.createdAt).toLocaleString("en-US", {
@@ -357,9 +365,17 @@ export default function FeedTransactionsPage() {
                                     padding: "11px 16px",
                                     alignItems: "center",
                                     borderBottom: i < transactions.length - 1 ? "1px solid var(--border)" : "none",
+                                    opacity: tx.isFree ? 0.55 : 1,
                                 }}
                             >
-                                <TypeChip txType={tx.txType} />
+                                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                    <TypeChip txType={tx.txType} />
+                                    {tx.isFree && (
+                                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "rgba(148,163,184,0.15)", color: "var(--text-tertiary)", whiteSpace: "nowrap", width: "fit-content" }}>
+                                            Beta
+                                        </span>
+                                    )}
+                                </div>
 
                                 <UserCell
                                     id={tx.fromId}

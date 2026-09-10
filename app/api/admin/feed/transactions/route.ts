@@ -118,6 +118,39 @@ export async function GET(req: Request) {
         createdAt: t.createdAt ?? null,
     }));
 
+    // Cross-reference session owners against free_access to flag beta/comped sessions
+    const freeOwnerIds = new Set<string>();
+    if ((sessionDocs as SessionDoc[]).length > 0) {
+        const ownerIds = [...new Set((sessionDocs as SessionDoc[]).map(d => d.ownerId).filter(Boolean) as string[])];
+        const [profiles, freeAccessDocs] = await Promise.all([
+            db.collection("user_profiles").find({ id: { $in: ownerIds } }, { projection: { id: 1, email: 1 } }).toArray(),
+            db.collection("free_access").find({}).toArray(),
+        ]);
+
+        const emailByOwner = new Map(profiles.map(p => [String(p.id), String(p.email ?? "").toLowerCase()]));
+        // Map of email → [{createdAt, expiresAt}]
+        const freeByEmail = new Map<string, { createdAt: Date | null; expiresAt: Date | null }[]>();
+        for (const f of freeAccessDocs) {
+            const email = String(f.email ?? "").toLowerCase();
+            if (!freeByEmail.has(email)) freeByEmail.set(email, []);
+            freeByEmail.get(email)!.push({ createdAt: f.createdAt ?? null, expiresAt: f.expiresAt ?? null });
+        }
+
+        for (const s of sessionDocs as SessionDoc[]) {
+            if (!s.ownerId) continue;
+            const email = emailByOwner.get(s.ownerId);
+            if (!email) continue;
+            const entries = freeByEmail.get(email) ?? [];
+            const at = s.startedAt ? new Date(s.startedAt) : null;
+            if (!at) continue;
+            const wasFree = entries.some(e =>
+                (!e.createdAt || new Date(e.createdAt) <= at) &&
+                (!e.expiresAt || new Date(e.expiresAt) >= at)
+            );
+            if (wasFree) freeOwnerIds.add(s.ownerId);
+        }
+    }
+
     const sessions = (sessionDocs as SessionDoc[]).map((t) => ({
         id: String(t._id),
         txType: "session_purchase",
@@ -130,6 +163,7 @@ export async function GET(req: Request) {
         createdAt: t.startedAt ?? t.createdAt ?? null,
         sessionName: t.name ?? null,
         durationMinutes: t.durationMinutes ?? null,
+        isFree: t.ownerId ? freeOwnerIds.has(t.ownerId) : false,
     }));
 
     const merged = [...beats, ...wallet, ...sessions]
@@ -148,14 +182,16 @@ export async function GET(req: Request) {
         toName: t.toId ? (nameMap[t.toId] ?? null) : null,
     }));
 
+    const sessionPurchasePaid = sessionPurchaseTotal - freeOwnerIds.size;
+
     return NextResponse.json({
         transactions: all,
         totals: {
             purchase: beatPurchaseTotal,
             beatTip: beatTipTotal + beatTipWalletTotal,
             directTip: directTipTotal,
-            sessionPurchase: sessionPurchaseTotal,
-            combined: beatPurchaseTotal + beatTipTotal + beatTipWalletTotal + directTipTotal + sessionPurchaseTotal,
+            sessionPurchase: sessionPurchasePaid,
+            combined: beatPurchaseTotal + beatTipTotal + beatTipWalletTotal + directTipTotal + sessionPurchasePaid,
         },
     });
 }
