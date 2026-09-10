@@ -28,9 +28,8 @@ function walletQuery(txType: TxTypeFilter | null) {
     return { type: { $in: KNOWN_WALLET_TYPES } };
 }
 
-function sessionQuery(txType: TxTypeFilter | null) {
-    if (txType === "session_purchase" || txType === null) return {};
-    return null;
+function includeSessionQuery(txType: TxTypeFilter | null) {
+    return txType === "session_purchase" || txType === null;
 }
 
 type BeatDoc = {
@@ -44,9 +43,13 @@ type WalletDoc = {
     stripeSessionId?: string; senderName?: string; senderEmail?: string; createdAt?: Date;
 };
 type SessionDoc = {
-    _id?: object; ownerId?: string; type?: string;
-    amountCents?: number; durationMinutes?: number; sessionName?: string; sessionId?: string;
-    stripeSessionId?: string; stripePaymentIntentId?: string; createdAt?: Date;
+    _id?: object; ownerId?: string; name?: string;
+    durationMinutes?: number; startedAt?: Date; createdAt?: Date;
+};
+
+// Mirrors SESSION_DURATIONS in the DJ feed app
+const SESSION_PRICE_BY_MINUTES: Record<number, number> = {
+    120: 200, 300: 400, 480: 600, 720: 800, 1440: 1500,
 };
 
 export async function GET(req: Request) {
@@ -64,7 +67,11 @@ export async function GET(req: Request) {
     const db = await getFeedDb();
     const bq = beatQuery(txType);
     const wq = walletQuery(txType);
-    const sq = sessionQuery(txType);
+    const includeSessions = includeSessionQuery(txType);
+
+    // dj_sessions is the ground truth for all purchased sessions (Stripe + wallet).
+    // startedAt being set means the session was actually started (not just a draft).
+    const sessionFilter = { startedAt: { $ne: null } };
 
     const [beatDocs, walletDocs, sessionDocs, beatPurchaseTotal, beatTipTotal, directTipTotal, beatTipWalletTotal, sessionPurchaseTotal] = await Promise.all([
         bq !== null
@@ -73,14 +80,14 @@ export async function GET(req: Request) {
         wq !== null
             ? db.collection("dj_wallet_transactions").find(wq).sort({ createdAt: -1 }).limit(limit).toArray()
             : Promise.resolve([]),
-        sq !== null
-            ? db.collection("session_transactions").find(sq).sort({ createdAt: -1 }).limit(limit).toArray()
+        includeSessions
+            ? db.collection("dj_sessions").find(sessionFilter).sort({ startedAt: -1 }).limit(limit).toArray()
             : Promise.resolve([]),
         db.collection("beat_transactions").countDocuments({ type: "purchase" }),
         db.collection("beat_transactions").countDocuments({ type: "tip" }),
         db.collection("dj_wallet_transactions").countDocuments({ type: "direct_tip" }),
         db.collection("dj_wallet_transactions").countDocuments({ type: "beat_tip" }),
-        db.collection("session_transactions").countDocuments({ type: "session_purchase" }),
+        db.collection("dj_sessions").countDocuments(sessionFilter),
     ]);
 
     const beats = (beatDocs as BeatDoc[]).map((t) => ({
@@ -114,15 +121,14 @@ export async function GET(req: Request) {
     const sessions = (sessionDocs as SessionDoc[]).map((t) => ({
         id: String(t._id),
         txType: "session_purchase",
-        // session purchase: DJ (from) → platform (to)
         fromId: t.ownerId ?? null,
         toId: null,
         beats: null,
-        amountCents: t.amountCents ?? null,
+        amountCents: t.durationMinutes != null ? (SESSION_PRICE_BY_MINUTES[t.durationMinutes] ?? null) : null,
         requestId: null,
-        stripeRef: t.stripeSessionId ?? t.stripePaymentIntentId ?? null,
-        createdAt: t.createdAt ?? null,
-        sessionName: t.sessionName ?? null,
+        stripeRef: null,
+        createdAt: t.startedAt ?? t.createdAt ?? null,
+        sessionName: t.name ?? null,
         durationMinutes: t.durationMinutes ?? null,
     }));
 
