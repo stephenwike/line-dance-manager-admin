@@ -60,7 +60,7 @@ export async function GET(req: Request) {
     const limit = Math.min(parseInt(searchParams.get("limit") ?? "100", 10), 500);
     const skip = parseInt(searchParams.get("skip") ?? "0", 10);
     const raw = searchParams.get("txType") as TxTypeFilter | null;
-    const txType: TxTypeFilter | null = ["purchase", "beat_tip", "direct_tip"].includes(raw ?? "")
+    const txType: TxTypeFilter | null = ["purchase", "beat_tip", "direct_tip", "session_purchase"].includes(raw ?? "")
         ? (raw as TxTypeFilter)
         : null;
 
