@@ -6,8 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 
 interface NavEvent { slug: string; shortTitle: string; dateShort: string }
 
-const BASE_NAV = [
+const TOP_NAV = [
     { href: "/dashboard", label: "Dashboard", icon: "⊞", section: null },
+];
+
+const BASE_NAV = [
     { href: "/dances", label: "Dances", icon: "♪", section: "Website" },
     { href: "/instructor-claims", label: "Instructor Claims", icon: "👤", section: null },
     { href: "/venue-claims", label: "Venue Claims", icon: "🏠", section: null },
@@ -73,11 +76,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
 
     // Build dynamic nav: Special Events section populated from DB
-    const eventNavItems = events.flatMap((e, i) => [
-        { href: `/registrations/${e.slug}`, label: `${e.shortTitle} (${e.dateShort})`, icon: "🎟️", section: i === 0 ? "Special Events" : null },
-        { href: `/registrations/${e.slug}/tally`, label: "Request Tally", icon: "📊", section: null },
-    ]);
-    const NAV = [...eventNavItems, ...BASE_NAV];
+    const eventNavItems = events.map((e, i) => ({
+        href: `/registrations/${e.slug}`,
+        label: `${e.shortTitle} (${e.dateShort})`,
+        icon: "🎟️",
+        section: i === 0 ? "Special Events" : null,
+    }));
+    const NAV = [...TOP_NAV, ...eventNavItems, ...BASE_NAV];
 
     function NavLink({ href, label, icon }: { href: string; label: string; icon: string }) {
         const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
