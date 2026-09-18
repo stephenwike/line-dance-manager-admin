@@ -118,6 +118,64 @@ Best,
 Stephen`,
     },
     {
+        id: "one-week-out",
+        label: "One Week Out",
+        subject: `One Week Away — Int LD Social ${NEW_EVENT_SHORT}`,
+        body: (name) => `Hello ${name},
+
+We're just one week away from the Intermediate Line Dance Social, and I'm so excited to see everyone there!
+
+Here's a quick reminder of the details:
+
+Date: ${NEW_EVENT_DATE}
+Time: 12:00 PM – 4:00 PM
+Location:
+Midnight Toad
+5302 S Federal Cir # A
+Littleton, CO 80123
+
+Food
+
+To make this first event extra special, I'm having it catered by Brother's BBQ! If you have any dietary restrictions or allergies, please reply to this email and let me know so I can plan accordingly. Outside food is welcome if you'd like to bring something of your own.
+
+Guaranteed Dance List
+
+The Guaranteed Dance List has been published! Check out the dances we'll be doing at:
+
+  https://beyondlinedance.com/events/intermediate-social/guaranteed-list
+
+I can't wait to hit the dance floor with all of you — see you next Saturday!
+
+Best,
+Stephen`,
+    },
+    {
+        id: "day-before",
+        label: "Day Before",
+        subject: `See You Tomorrow — Int LD Social ${NEW_EVENT_SHORT}`,
+        body: (name) => `Hello ${name},
+
+The big day is almost here — the Intermediate Line Dance Social is tomorrow!
+
+Date: ${NEW_EVENT_DATE}
+Time: 12:00 PM – 4:00 PM
+Location:
+Midnight Toad
+5302 S Federal Cir # A
+Littleton, CO 80123
+
+The Guaranteed Dance List is published and ready to view at:
+
+  https://beyondlinedance.com/events/intermediate-social/guaranteed-list
+
+We'll have catering from Brother's BBQ on site. If you have any last-minute questions, just reply to this email.
+
+Can't wait to see you on the dance floor tomorrow!
+
+Best,
+Stephen`,
+    },
+    {
         id: "custom",
         label: "Custom",
         subject: `LDCO Int LD Social — ${EVENT_SHORT}`,
