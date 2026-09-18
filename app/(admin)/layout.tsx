@@ -76,12 +76,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
 
     // Build dynamic nav: Special Events section populated from DB
-    const eventNavItems = events.map((e, i) => ({
-        href: `/registrations/${e.slug}`,
-        label: `${e.shortTitle} (${e.dateShort})`,
-        icon: "🎟️",
-        section: i === 0 ? "Special Events" : null,
-    }));
+    const eventNavItems = [
+        { href: "/registrations", label: "All Events", icon: "🗂️", section: "Special Events" },
+        ...events.map(e => ({
+            href: `/registrations/${e.slug}`,
+            label: `${e.shortTitle} (${e.dateShort})`,
+            icon: "🎟️",
+            section: null as string | null,
+        })),
+    ];
     const NAV = [...TOP_NAV, ...eventNavItems, ...BASE_NAV];
 
     function NavLink({ href, label, icon }: { href: string; label: string; icon: string }) {
