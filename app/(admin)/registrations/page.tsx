@@ -1,8 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { type EventMeta } from "@/lib/eventTemplates";
+
+interface VenueDoc {
+    _id: string;
+    name: string;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+}
+
+function venueAddress(v: VenueDoc) {
+    return [v.address, v.city, v.state].filter(Boolean).join(", ");
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -80,6 +92,7 @@ export default function SpecialEventsPage() {
     const [form, setForm] = useState<FormState>(BLANK);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [venues, setVenues] = useState<VenueDoc[]>([]);
 
     async function load() {
         setLoading(true);
@@ -88,6 +101,13 @@ export default function SpecialEventsPage() {
             .then(setEvents)
             .finally(() => setLoading(false));
     }
+
+    useEffect(() => {
+        fetch("/api/admin/bld/venues")
+            .then(r => r.ok ? r.json() : [])
+            .then(setVenues)
+            .catch(() => {});
+    }, []);
 
     useEffect(() => { load(); }, []);
 
@@ -209,23 +229,18 @@ export default function SpecialEventsPage() {
                             )}
                         </Field>
 
-                        {/* Venue name */}
-                        <Field label="Venue">
-                            <input
-                                value={form.venueName}
-                                onChange={e => set("venueName", e.target.value)}
-                                placeholder="Midnight Toad"
-                                style={inputStyle}
-                            />
-                        </Field>
-
-                        {/* Venue address */}
-                        <Field label="Address">
-                            <input
-                                value={form.venueAddress}
-                                onChange={e => set("venueAddress", e.target.value)}
-                                placeholder="5302 S Federal Cir #A, Littleton, CO 80123"
-                                style={inputStyle}
+                        {/* Venue — typeahead across both columns */}
+                        <Field label="Venue" hint="Type to search, or enter a new one" span>
+                            <VenueTypeahead
+                                venues={venues}
+                                venueName={form.venueName}
+                                venueAddress={form.venueAddress}
+                                onChangeName={v => set("venueName", v)}
+                                onChangeAddress={v => set("venueAddress", v)}
+                                onSelect={v => {
+                                    set("venueName", v.name);
+                                    set("venueAddress", venueAddress(v));
+                                }}
                             />
                         </Field>
 
@@ -307,6 +322,89 @@ export default function SpecialEventsPage() {
                     ))}
                 </div>
             )}
+        </div>
+    );
+}
+
+// ── Venue typeahead ───────────────────────────────────────────────────────────
+
+function VenueTypeahead({ venues, venueName, venueAddress: addrValue, onChangeName, onChangeAddress, onSelect }: {
+    venues: VenueDoc[];
+    venueName: string;
+    venueAddress: string;
+    onChangeName: (v: string) => void;
+    onChangeAddress: (v: string) => void;
+    onSelect: (v: VenueDoc) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const filtered = venueName.trim()
+        ? venues.filter(v => v.name.toLowerCase().includes(venueName.toLowerCase()))
+        : venues;
+
+    // Close on outside click
+    useEffect(() => {
+        function handle(e: MouseEvent) {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handle);
+        return () => document.removeEventListener("mousedown", handle);
+    }, []);
+
+    return (
+        <div ref={containerRef} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 20px" }}>
+            {/* Name with dropdown */}
+            <div style={{ position: "relative" }}>
+                <input
+                    value={venueName}
+                    onChange={e => { onChangeName(e.target.value); setOpen(true); }}
+                    onFocus={() => setOpen(true)}
+                    placeholder="Midnight Toad"
+                    style={inputStyle}
+                    autoComplete="off"
+                />
+                {open && filtered.length > 0 && (
+                    <div style={{
+                        position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+                        background: "var(--surface)", border: "1px solid var(--border)",
+                        borderRadius: 8, zIndex: 50, overflow: "hidden",
+                        boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                        maxHeight: 220, overflowY: "auto",
+                    }}>
+                        {filtered.map((v, i) => (
+                            <button
+                                key={v._id}
+                                type="button"
+                                onMouseDown={e => { e.preventDefault(); onSelect(v); setOpen(false); }}
+                                style={{
+                                    display: "block", width: "100%", textAlign: "left",
+                                    padding: "9px 12px", border: "none",
+                                    borderBottom: i < filtered.length - 1 ? "1px solid var(--border)" : "none",
+                                    background: "transparent", cursor: "pointer",
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-raised)")}
+                                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                            >
+                                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{v.name}</p>
+                                {venueAddress(v) && (
+                                    <p style={{ fontSize: 11, color: "var(--text-tertiary)", margin: "2px 0 0" }}>{venueAddress(v)}</p>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Address */}
+            <input
+                value={addrValue}
+                onChange={e => onChangeAddress(e.target.value)}
+                placeholder="5302 S Federal Cir #A, Littleton, CO 80123"
+                style={inputStyle}
+            />
         </div>
     );
 }
