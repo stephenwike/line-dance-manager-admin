@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getMainDb } from "@/lib/db";
+import { getMainDb, getEventsDb } from "@/lib/db";
 
 export async function GET(req: Request) {
     const session = await getSession();
@@ -10,7 +10,7 @@ export async function GET(req: Request) {
     const event = url.searchParams.get("event") || "intermediate-social-2026-09-12";
     const removedOnly = url.searchParams.get("removedOnly") === "true";
 
-    const db = await getMainDb();
+    const [db, mainDb] = await Promise.all([getEventsDb(), getMainDb()]);
 
     const statusFilter = removedOnly
         ? { attendeeStatus: "removed" }
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     const danceInfoById = new Map<string, DanceInfo>();
 
     if (danceIds.size > 0) {
-        const dances = await db.collection<{ _id: string; danceName: string; primaryTrack?: string; tracks?: string[] }>("dances")
+        const dances = await mainDb.collection<{ _id: string; danceName: string; primaryTrack?: string; tracks?: string[] }>("dances")
             .find({ _id: { $in: Array.from(danceIds) } })
             .project({ danceName: 1, primaryTrack: 1, tracks: 1 })
             .toArray();
@@ -43,7 +43,7 @@ export async function GET(req: Request) {
             .filter(Boolean) as string[];
         const trackById = new Map<string, { name: string; artists: string[]; duration_ms?: number }>();
         if (trackIds.length > 0) {
-            const tracks = await db.collection<{ _id: string; name: string; artists: string[]; duration_ms?: number }>("tracks")
+            const tracks = await mainDb.collection<{ _id: string; name: string; artists: string[]; duration_ms?: number }>("tracks")
                 .find({ _id: { $in: trackIds } })
                 .project({ name: 1, artists: 1, duration_ms: 1 })
                 .toArray();
@@ -134,7 +134,7 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: "Missing event or fromText" }, { status: 400 });
     }
 
-    const db = await getMainDb();
+    const db = await getEventsDb();
 
     // Case-insensitive regex so casing differences between registrants don't break matching
     const fromRegex = { $regex: `^${fromText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" };

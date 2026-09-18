@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getMainDb } from "@/lib/db";
+import { getEventsDb } from "@/lib/db";
 import { ObjectId } from "mongodb";
 
 export async function PATCH(
@@ -13,7 +13,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    const db = await getMainDb();
+    const db = await getEventsDb();
 
     if (body.addEmail) {
         const result = await db.collection("event_registrations").updateOne(

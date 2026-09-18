@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getMainDb } from "@/lib/db";
+import { getEventsDb } from "@/lib/db";
 
 export async function GET(req: Request) {
     const session = await getSession();
@@ -8,7 +8,7 @@ export async function GET(req: Request) {
 
     const event = new URL(req.url).searchParams.get("event") || "intermediate-social-2026-09-12";
 
-    const db = await getMainDb();
+    const db = await getEventsDb();
     const docs = await db.collection("event_registrations")
         .find({ event })
         .sort({ createdAt: -1 })

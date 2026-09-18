@@ -45,3 +45,8 @@ export async function getFeedDb() {
 export async function getBldDb() {
     return getDb(process.env.BLD_DB_NAME ?? "bld");
 }
+
+/** Events database (special event registrations, event metadata) */
+export async function getEventsDb() {
+    return getDb(process.env.EVENTS_DB_NAME ?? "ldco-events");
+}

@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
-const NAV = [
+interface NavEvent { slug: string; shortTitle: string; dateShort: string }
+
+const BASE_NAV = [
     { href: "/dashboard", label: "Dashboard", icon: "⊞", section: null },
-    { href: "/registrations/intermediate-social", label: "Int LD Social", icon: "🎟️", section: "Special Events" },
-    { href: "/registrations/intermediate-social/tally", label: "Request Tally", icon: "📊", section: null },
     { href: "/dances", label: "Dances", icon: "♪", section: "Website" },
     { href: "/instructor-claims", label: "Instructor Claims", icon: "👤", section: null },
     { href: "/venue-claims", label: "Venue Claims", icon: "🏠", section: null },
@@ -33,6 +33,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const [hoveredHref, setHoveredHref] = useState<string | null>(null);
     const [logoutHovered, setLogoutHovered] = useState(false);
     const [navOpen, setNavOpen] = useState(false);
+    const [events, setEvents] = useState<NavEvent[]>([]);
+
+    useEffect(() => {
+        fetch("/api/admin/events")
+            .then(r => r.ok ? r.json() : [])
+            .then((data: NavEvent[]) => setEvents(data))
+            .catch(() => {});
+    }, []);
 
     // Close nav when route changes (mobile: after tapping a link)
     useEffect(() => {
@@ -64,44 +72,50 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
     );
 
+    // Build dynamic nav: Special Events section populated from DB
+    const eventNavItems = events.flatMap((e, i) => [
+        { href: `/registrations/${e.slug}`, label: `${e.shortTitle} (${e.dateShort})`, icon: "🎟️", section: i === 0 ? "Special Events" : null },
+        { href: `/registrations/${e.slug}/tally`, label: "Request Tally", icon: "📊", section: null },
+    ]);
+    const NAV = [...eventNavItems, ...BASE_NAV];
+
+    function NavLink({ href, label, icon }: { href: string; label: string; icon: string }) {
+        const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+        const hovered = hoveredHref === href && !active;
+        return (
+            <Link href={href} onMouseEnter={() => setHoveredHref(href)} onMouseLeave={() => setHoveredHref(null)}
+                style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "8px 10px", borderRadius: 8,
+                    textDecoration: "none", fontSize: 13,
+                    fontWeight: active ? 600 : 400,
+                    color: active ? "var(--sidebar-text-active)" : "var(--sidebar-text)",
+                    background: active ? "var(--sidebar-active-bg)" : hovered ? "var(--sidebar-hover-bg)" : "transparent",
+                    transition: "background 0.15s, color 0.15s",
+                }}
+            >
+                <span style={{ fontSize: 15, width: 18, textAlign: "center", flexShrink: 0 }}>{icon}</span>
+                {label}
+            </Link>
+        );
+    }
+
     const navItems = (
         <nav style={{ flex: 1, padding: "12px 8px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-            {NAV.map(({ href, label, icon, section }) => {
-                const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
-                const hovered = hoveredHref === href && !active;
-                return (
-                    <div key={href}>
-                        {section && (
-                            <div style={{
-                                fontSize: 10, fontWeight: 700, color: "var(--sidebar-text)",
-                                textTransform: "uppercase", letterSpacing: "0.08em",
-                                padding: "10px 10px 4px", opacity: 0.5, marginTop: 4,
-                            }}>
-                                {section}
-                            </div>
-                        )}
-                        <Link
-                            href={href}
-                            onMouseEnter={() => setHoveredHref(href)}
-                            onMouseLeave={() => setHoveredHref(null)}
-                            style={{
-                                display: "flex", alignItems: "center", gap: 10,
-                                padding: "8px 10px", borderRadius: 8,
-                                textDecoration: "none", fontSize: 13,
-                                fontWeight: active ? 600 : 400,
-                                color: active ? "var(--sidebar-text-active)" : "var(--sidebar-text)",
-                                background: active
-                                    ? "var(--sidebar-active-bg)"
-                                    : hovered ? "var(--sidebar-hover-bg)" : "transparent",
-                                transition: "background 0.15s, color 0.15s",
-                            }}
-                        >
-                            <span style={{ fontSize: 15, width: 18, textAlign: "center", flexShrink: 0 }}>{icon}</span>
-                            {label}
-                        </Link>
-                    </div>
-                );
-            })}
+            {NAV.map(({ href, label, icon, section }) => (
+                <div key={href}>
+                    {section && (
+                        <div style={{
+                            fontSize: 10, fontWeight: 700, color: "var(--sidebar-text)",
+                            textTransform: "uppercase", letterSpacing: "0.08em",
+                            padding: "10px 10px 4px", opacity: 0.5, marginTop: 4,
+                        }}>
+                            {section}
+                        </div>
+                    )}
+                    <NavLink href={href} label={label} icon={icon} />
+                </div>
+            ))}
         </nav>
     );
 
