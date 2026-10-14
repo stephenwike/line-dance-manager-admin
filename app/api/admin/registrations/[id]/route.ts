@@ -33,6 +33,9 @@ export async function PATCH(
         update.paymentStatus = "paid";
         update.paidAt = new Date();
     }
+    if ("catering" in body) {
+        update.catering = body.catering === true;
+    }
 
     if (Object.keys(update).length === 0) {
         return NextResponse.json({ error: "Nothing to update" }, { status: 400 });

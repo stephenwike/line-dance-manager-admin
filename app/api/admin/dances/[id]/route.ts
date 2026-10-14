@@ -165,3 +165,69 @@ export async function POST(
 
     return NextResponse.json({ ok: true });
 }
+
+// ── PATCH /api/admin/dances/[id] — update stepsheet / primary track ───────────
+
+export async function PATCH(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { id } = await params;
+    const body = await req.json().catch(() => ({}));
+
+    const mainDb = await getMainDb();
+
+    const setFields: Record<string, unknown> = {};
+    let newTrackId: string | null = null;
+
+    if ("stepsheet" in body) {
+        setFields.stepsheet = (body.stepsheet as string ?? "").trim();
+    }
+
+    if (body.track) {
+        const t = body.track as TrackInput;
+        newTrackId = t.spotifyId ?? generateManualTrackId(t.name, t.artists);
+        const tracks = mainDb.collection<TrackDoc>("tracks");
+        const existing = await tracks.findOne({ _id: newTrackId });
+        if (!existing) {
+            await tracks.insertOne({
+                _id: newTrackId,
+                name: t.name,
+                artists: t.artists,
+                isrc: t.isrc ?? "",
+                uri: t.spotifyUri ?? "",
+                ...(t.duration_ms != null && { duration_ms: t.duration_ms }),
+                ...(t.explicit != null && { explicit: t.explicit }),
+                ...(t.preview_url !== undefined && { preview_url: t.preview_url }),
+            });
+        }
+        setFields.primaryTrack = newTrackId;
+    }
+
+    if (Object.keys(setFields).length === 0) {
+        return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    }
+
+    // Dance _id may be an ObjectId or a plain string (SHA1). Try string first, then ObjectId.
+    let objectId: ObjectId | null = null;
+    try { objectId = new ObjectId(id); } catch { /* not a valid ObjectId */ }
+
+    const update = {
+        $set: setFields,
+        ...(newTrackId ? { $addToSet: { tracks: newTrackId } } : {}),
+    } as never;
+
+    let result = await mainDb.collection("dances").updateOne({ _id: id } as never, update);
+    if (result.matchedCount === 0 && objectId) {
+        result = await mainDb.collection("dances").updateOne({ _id: objectId }, update);
+    }
+
+    if (result.matchedCount === 0) {
+        return NextResponse.json({ error: "Dance not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, ...(newTrackId ? { trackId: newTrackId } : {}) });
+}

@@ -12,6 +12,7 @@ const TOP_NAV = [
 
 const BASE_NAV = [
     { href: "/dances", label: "Dances", icon: "♪", section: "Website" },
+    { href: "/dances/incomplete", label: "Incomplete Dances", icon: "⚠", section: null },
     { href: "/instructor-claims", label: "Instructor Claims", icon: "👤", section: null },
     { href: "/venue-claims", label: "Venue Claims", icon: "🏠", section: null },
     { href: "/reports", label: "Reports", icon: "⚑", section: null },

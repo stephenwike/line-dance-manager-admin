@@ -30,6 +30,7 @@ export async function GET(req: Request) {
         paidAt: r.paidAt ? r.paidAt.toISOString() : null,
         createdAt: r.createdAt ? r.createdAt.toISOString() : null,
         attendeeStatus: r.attendeeStatus ?? "registered",
+        catering: r.catering === true,
         requests: Array.isArray(r.requests) ? r.requests : [],
         emails: Array.isArray(r.emails) ? r.emails : [],
     })));

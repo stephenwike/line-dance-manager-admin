@@ -118,6 +118,67 @@ Best,
 Stephen`,
         },
         {
+            id: "post-event-feedback",
+            label: "Feedback Request",
+            subject: `How was the ${shortTitle}? — We'd love to hear from you`,
+            body: (name) => `Hello ${name},
+
+Thank you so much for joining us at the ${title} on ${date} — it was such a great day on the dance floor, and we hope you had as much fun as we did!
+
+We'd love to hear what you thought. Your feedback helps us make each event better than the last.
+
+A few questions to get you started — feel free to answer any or all:
+
+  • What did you enjoy most about the event?
+  • Is there anything you'd like to see done differently next time?
+  • How did you feel about the venue, the music, and the dance selection?
+  • Would you come back for another LDCO event?
+
+Just hit reply — even a few sentences would mean a lot to us.
+
+Thanks again for being part of the LDCO community. We hope to see you on the dance floor again soon!
+
+Best,
+Stephen`,
+        },
+        {
+            id: "next-event-promo",
+            label: "Next Event Promo",
+            subject: `Two weeks later — your thoughts + save November 21st!`,
+            body: (name) => `Hello ${name},
+
+It's been two weeks since the ${title} and it was a great time. I hope you enjoyed it as much as I did!
+
+Your Feedback
+
+Before I dive into the exciting news, I'd love to hear how you felt about the event. Even a few sentences would go a long way:
+
+  • What did you enjoy most?
+  • Anything you'd change for next time?
+  • How did you feel about the venue, music, and dance selection?
+
+Just hit reply — your feedback directly shapes what we do next.
+
+Save the Date: November 21st at the Turnverein
+
+I'm thrilled to announce that the next LDCO Intermediate Social is on Saturday, November 21st at the Denver Turnverein!
+
+Registration is $20, and there's an optional BBQ catering add-on for $15 (total: $35 with catering).
+
+Register at: https://beyondlinedance.com/events/intermediate-social
+
+Dance Requests
+
+Once you're registered, you can submit up to 10 dance requests and update them anytime you like up until two weeks before the event. The most-requested dances make it onto the Guaranteed Dance List, so the more people request, the better the floor.
+
+If you're attending Dance Magic, this is your chance to put those fresh dances to work — add anything new you pick up and I'll make sure it's in the mix on November 21st.
+
+Looking forward to dancing with you again soon!
+
+Best,
+Stephen`,
+        },
+        {
             id: "custom",
             label: "Custom",
             subject: `LDCO ${shortTitle} — ${dateShort}`,
