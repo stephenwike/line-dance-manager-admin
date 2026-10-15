@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/auth";
 import { getBldDb } from "@/lib/db";
+import { getVenue } from "@/lib/venues";
 
 function clean(v: unknown) {
     return typeof v === "string" ? v.trim() : "";
@@ -49,12 +50,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const isActive = typeof body.isActive === "boolean" ? body.isActive : true;
 
         if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
-        if (!ObjectId.isValid(venueId)) return NextResponse.json({ error: "A venue is required" }, { status: 400 });
+        if (!venueId) return NextResponse.json({ error: "A venue is required" }, { status: 400 });
+        if (!(await getVenue(venueId))) return NextResponse.json({ error: "Venue not found" }, { status: 404 });
 
         const db = await getBldDb();
         const result = await db.collection("event_types").updateOne(
             { _id: new ObjectId(id) },
-            { $set: { title, level, price, venueId: new ObjectId(venueId), defaultStartTime, defaultDurationMinutes, isActive, updatedAt: new Date() } }
+            { $set: { title, level, price, venueId, defaultStartTime, defaultDurationMinutes, isActive, updatedAt: new Date() } }
         );
 
         if (result.matchedCount === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });

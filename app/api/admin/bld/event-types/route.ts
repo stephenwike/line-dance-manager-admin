@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/auth";
 import { getBldDb } from "@/lib/db";
+import { getVenue } from "@/lib/venues";
 
 function clean(v: unknown) {
     return typeof v === "string" ? v.trim() : "";
@@ -47,15 +47,14 @@ export async function POST(req: Request) {
         const isActive = typeof body.isActive === "boolean" ? body.isActive : true;
 
         if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 });
-        if (!ObjectId.isValid(venueId)) return NextResponse.json({ error: "A venue is required" }, { status: 400 });
+        if (!venueId) return NextResponse.json({ error: "A venue is required" }, { status: 400 });
+        if (!(await getVenue(venueId))) return NextResponse.json({ error: "Venue not found" }, { status: 404 });
 
         const db = await getBldDb();
-        const venue = await db.collection("venues").findOne({ _id: new ObjectId(venueId) });
-        if (!venue) return NextResponse.json({ error: "Venue not found" }, { status: 404 });
 
         const res = await db.collection("event_types").insertOne({
             title, level, price,
-            venueId: new ObjectId(venueId),
+            venueId, // ldco.venues id (string)
             defaultStartTime, defaultDurationMinutes,
             isActive,
             createdAt: new Date(),

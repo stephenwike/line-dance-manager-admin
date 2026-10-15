@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/auth";
 import { getBldDb } from "@/lib/db";
+import { venueName } from "@/lib/venues";
 import { isYmd } from "@/lib/time";
 
 function lessonTimeToIso(date: string, time: string | null): string {
@@ -21,8 +22,7 @@ async function resolveVenueName(db: Awaited<ReturnType<typeof getBldDb>>, eventT
         if (!etId) return "Unknown venue";
         const et = await db.collection("event_types").findOne({ _id: etId });
         if (!et?.venueId) return "Unknown venue";
-        const venue = await db.collection("venues").findOne({ _id: new ObjectId(String(et.venueId)) });
-        return venue?.name ? String(venue.name) : "Unknown venue";
+        return await venueName(et.venueId);
     } catch {
         return "Unknown venue";
     }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getBldDb } from "@/lib/db";
+import { createVenue, listVenues } from "@/lib/venues";
 
 function clean(v: unknown) {
     if (v === null || v === undefined) return "";
@@ -11,12 +11,7 @@ export async function GET() {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const db = await getBldDb();
-    const venues = await db.collection("venues").find({}).sort({ name: 1 }).toArray();
-
-    return NextResponse.json(
-        venues.map((v) => ({ ...v, _id: String(v._id) }))
-    );
+    return NextResponse.json(await listVenues());
 }
 
 export async function POST(req: Request) {
@@ -34,10 +29,9 @@ export async function POST(req: Request) {
         if (!name) return NextResponse.json({ error: "Venue name is required" }, { status: 400 });
         if (state && state.length !== 2) return NextResponse.json({ error: "State must be a 2-letter code (e.g. CO)" }, { status: 400 });
 
-        const db = await getBldDb();
-        const res = await db.collection("venues").insertOne({ name, address, city, state });
+        const venueId = await createVenue({ name, address, city, state });
 
-        return NextResponse.json({ ok: true, venueId: String(res.insertedId) });
+        return NextResponse.json({ ok: true, venueId });
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         return NextResponse.json({ error: msg }, { status: 500 });

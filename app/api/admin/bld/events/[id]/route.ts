@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/auth";
 import { getBldDb } from "@/lib/db";
+import { getVenue, venueName } from "@/lib/venues";
 import { endTimeFromStartAndDuration } from "@/lib/time";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -40,8 +41,7 @@ async function resolveVenueName(db: Awaited<ReturnType<typeof getBldDb>>, eventT
         if (!etId) return "Unknown venue";
         const et = await db.collection("event_types").findOne({ _id: etId });
         if (!et?.venueId) return "Unknown venue";
-        const venue = await db.collection("venues").findOne({ _id: new ObjectId(String(et.venueId)) });
-        return venue?.name ? String(venue.name) : "Unknown venue";
+        return await venueName(et.venueId);
     } catch {
         return "Unknown venue";
     }
@@ -63,7 +63,7 @@ export async function GET(_req: Request, { params }: Ctx) {
         if (!etId) return [null, null];
         const et = await db.collection("event_types").findOne({ _id: etId });
         if (!et) return [null, null];
-        const v = et.venueId ? await db.collection("venues").findOne({ _id: new ObjectId(String(et.venueId)) }) : null;
+        const v = et.venueId ? await getVenue(et.venueId) : null;
         return [et, v];
     })();
 
@@ -85,7 +85,7 @@ export async function GET(_req: Request, { params }: Ctx) {
         specialNote: ev.specialNote ?? null,
         lessons: Array.isArray(ev.lessons) ? ev.lessons : [],
         eventType: eventType ? { _id: String(eventType._id), title: eventType.title ?? "", level: eventType.level ?? "", price: eventType.price ?? "" } : null,
-        venue: venue ? { _id: String(venue._id), name: venue.name ?? "", address: venue.address ?? null, city: venue.city ?? null, state: venue.state ?? null } : null,
+        venue,
     });
 }
 
