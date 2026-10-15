@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getFeedDb } from "@/lib/db";
-import { resolveUserNames } from "@/lib/feedUsers";
+import { resolveUserEmails, resolveUserNames } from "@/lib/feedUsers";
 
 // txType values:
 //   "purchase"         → beat_transactions  type=purchase  (attendee buys beats with cash)
@@ -122,12 +122,12 @@ export async function GET(req: Request) {
     const freeOwnerIds = new Set<string>();
     if ((sessionDocs as SessionDoc[]).length > 0) {
         const ownerIds = [...new Set((sessionDocs as SessionDoc[]).map(d => d.ownerId).filter(Boolean) as string[])];
-        const [profiles, freeAccessDocs] = await Promise.all([
-            db.collection("user_profiles").find({ id: { $in: ownerIds } }, { projection: { id: 1, email: 1 } }).toArray(),
+        const [emails, freeAccessDocs] = await Promise.all([
+            resolveUserEmails(ownerIds),
             db.collection("free_access").find({}).toArray(),
         ]);
 
-        const emailByOwner = new Map(profiles.map(p => [String(p.id), String(p.email ?? "").toLowerCase()]));
+        const emailByOwner = new Map(Object.entries(emails));
         // Map of email → [{createdAt, expiresAt}]
         const freeByEmail = new Map<string, { createdAt: Date | null; expiresAt: Date | null }[]>();
         for (const f of freeAccessDocs) {

@@ -55,3 +55,23 @@ export async function resolveUserNames(ids: string[]): Promise<Record<string, st
 
     return nameMap;
 }
+
+/**
+ * Resolves emails for a set of dj-feed user IDs from `ldco.users`.
+ * Replaces the old `djfeed.user_profiles` copy (removed in ldco-database migration 0006).
+ */
+export async function resolveUserEmails(ids: string[]): Promise<Record<string, string>> {
+    const unique = [...new Set(ids.filter(Boolean))];
+    if (unique.length === 0) return {};
+
+    // users._id may be a string or, until ldco-database migration 0003 runs on live, an ObjectId
+    const asObjectIds = unique.filter((id) => ObjectId.isValid(id) && id.length === 24).map((id) => new ObjectId(id));
+    const users = await (await getMainDb()).collection("users")
+        .find({ _id: { $in: [...unique, ...asObjectIds] } } as object)
+        .project({ _id: 1, email: 1 })
+        .toArray();
+
+    return Object.fromEntries(
+        users.filter((u) => u.email).map((u) => [String(u._id), String(u.email).toLowerCase()]),
+    );
+}
