@@ -5,7 +5,6 @@ import { Db, ObjectId, Document } from "mongodb";
 
 // Tracks use a string _id (Spotify ID or SHA1 hash), not ObjectId.
 type TrackDoc = { _id: string } & Document;
-import crypto from "crypto";
 
 interface TrackInput {
     /** Spotify track ID — used as _id when present */
@@ -23,13 +22,6 @@ interface TrackInput {
  * For manual tracks (no Spotify ID), generate a stable string _id from name+artists.
  * Existing Spotify tracks use the Spotify ID directly as _id.
  */
-function generateManualTrackId(name: string, artists: string[]): string {
-    const combined = `${name.toLowerCase().replace(/\s+/g, "-")}|${artists
-        .map((a) => a.toLowerCase().replace(/\s+/g, "-"))
-        .join(".")}`;
-    return crypto.createHash("sha1").update(combined).digest("hex").substring(0, 24);
-}
-
 /**
  * Look up a choreographer by name (case-insensitive).
  * If not found, creates a new record. Returns the _id as a string.
@@ -80,8 +72,8 @@ export async function POST(
         return NextResponse.json({ error: "Pending dance not found." }, { status: 404 });
     }
 
-    // Use whatever _id the document actually has for the approved dance.
-    const approvedId = pending._id;
+    // Keep the pending dance's id for the approved dance, as a string (ldco-database decision 5).
+    const approvedId = String(pending._id);
 
     if (action === "approve") {
         // ── Resolve choreographer names → IDs ─────────────────────────────────
@@ -100,12 +92,16 @@ export async function POST(
         );
 
         // ── Upsert track ──────────────────────────────────────────────────────
+        // Spotify tracks use the Spotify ID as _id (matching existing schema). A manually typed song
+        // has no real track, so it goes to songArtists instead of a placeholder (ldco-database decision 7).
         let primaryTrackId = "";
-        if (track) {
+        const songArtists: { song: string; artist: string }[] = [];
+        if (track && !(track as TrackInput).spotifyId) {
             const t = track as TrackInput;
-            // Spotify tracks use the Spotify ID as _id (matching existing schema).
-            // Manual tracks fall back to a SHA1 of name+artists.
-            primaryTrackId = t.spotifyId ?? generateManualTrackId(t.name, t.artists);
+            songArtists.push({ song: t.name, artist: (t.artists ?? []).join(", ") });
+        } else if (track) {
+            const t = track as TrackInput;
+            primaryTrackId = t.spotifyId as string;
 
             const tracks = mainDb.collection<TrackDoc>("tracks");
             const existing = await tracks.findOne({ _id: primaryTrackId });
@@ -127,7 +123,11 @@ export async function POST(
         const additionalTrackIds: string[] = [];
         if (Array.isArray(additionalTracks) && additionalTracks.length > 0) {
             for (const at of additionalTracks as TrackInput[]) {
-                const altId = at.spotifyId ?? generateManualTrackId(at.name, at.artists);
+                if (!at.spotifyId) {
+                    songArtists.push({ song: at.name, artist: (at.artists ?? []).join(", ") });
+                    continue;
+                }
+                const altId = at.spotifyId;
                 const altTracks = mainDb.collection<TrackDoc>("tracks");
                 const existingAlt = await altTracks.findOne({ _id: altId });
                 if (!existingAlt) {
@@ -151,13 +151,14 @@ export async function POST(
         // (favorites, known, refresh, flagged) remain valid after approval.
         const allTrackIds = [...new Set([primaryTrackId, ...additionalTrackIds].filter(Boolean))];
         await mainDb.collection("dances").insertOne({
-            _id: approvedId,
+            _id: approvedId as never,
             danceName: overrides?.danceName ?? pending.danceName,
             choreographers: choreographerIds,
             stepsheet: overrides?.stepsheetUrl || pending.stepsheetUrl || pending.stepsheet || "",
             difficulty: overrides?.difficulty ?? pending.difficulty ?? "Beginner",
             primaryTrack: primaryTrackId,
             tracks: allTrackIds,
+            ...(songArtists.length ? { songArtists } : {}),
         });
     }
 
@@ -187,9 +188,13 @@ export async function PATCH(
         setFields.stepsheet = (body.stepsheet as string ?? "").trim();
     }
 
-    if (body.track) {
+    if (body.track && !(body.track as TrackInput).spotifyId) {
+        // A manually typed song: record it on the dance rather than creating a placeholder track
         const t = body.track as TrackInput;
-        newTrackId = t.spotifyId ?? generateManualTrackId(t.name, t.artists);
+        setFields.songArtists = [{ song: t.name, artist: (t.artists ?? []).join(", ") }];
+    } else if (body.track) {
+        const t = body.track as TrackInput;
+        newTrackId = t.spotifyId as string;
         const tracks = mainDb.collection<TrackDoc>("tracks");
         const existing = await tracks.findOne({ _id: newTrackId });
         if (!existing) {

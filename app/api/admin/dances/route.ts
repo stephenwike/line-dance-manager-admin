@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { ObjectId, Db } from "mongodb";
-import crypto from "crypto";
 import { getSession } from "@/lib/auth";
 import { getMainDb } from "@/lib/db";
 
@@ -19,13 +18,6 @@ interface TrackInput {
     preview_url?: string | null;
 }
 
-function generateManualTrackId(name: string, artists: string[]): string {
-    const combined = `${name.toLowerCase().replace(/\s+/g, "-")}|${artists
-        .map((a) => a.toLowerCase().replace(/\s+/g, "-"))
-        .join(".")}`;
-    return crypto.createHash("sha1").update(combined).digest("hex").substring(0, 24);
-}
-
 async function resolveChoreographer(db: Db, name: string): Promise<string> {
     const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const existing = await db
@@ -37,8 +29,13 @@ async function resolveChoreographer(db: Db, name: string): Promise<string> {
     return id;
 }
 
+// Only a matched Spotify track becomes a track document. A manually typed song has no real track,
+// so it is kept on the dance in songArtists instead of creating a placeholder (ldco-database decision 7).
+const toSongArtist = (t: TrackInput) => ({ song: t.name, artist: (t.artists ?? []).join(", ") });
+
 async function upsertTrack(db: Db, t: TrackInput): Promise<string> {
-    const trackId = t.spotifyId ?? generateManualTrackId(t.name, t.artists);
+    if (!t.spotifyId) throw new Error("upsertTrack requires a Spotify track");
+    const trackId = t.spotifyId;
     const tracks = db.collection<TrackDoc>("tracks");
     const existing = await tracks.findOne({ _id: trackId });
     if (!existing) {
@@ -107,34 +104,41 @@ export async function POST(req: Request) {
             choreographerNames.map((n: string) => resolveChoreographer(db, n))
         );
 
-        // Upsert primary track
+        // Upsert primary track (Spotify picks only; typed-in songs go to songArtists)
         let primaryTrackId = "";
+        const songArtists: { song: string; artist: string }[] = [];
         if (track?.name) {
-            primaryTrackId = await upsertTrack(db, track as TrackInput);
+            const t = track as TrackInput;
+            if (t.spotifyId) primaryTrackId = await upsertTrack(db, t);
+            else songArtists.push(toSongArtist(t));
         }
 
         // Upsert additional tracks
         const additionalTrackIds: string[] = [];
         if (Array.isArray(additionalTracks)) {
             for (const at of additionalTracks as TrackInput[]) {
-                if (at?.name) additionalTrackIds.push(await upsertTrack(db, at));
+                if (!at?.name) continue;
+                if (at.spotifyId) additionalTrackIds.push(await upsertTrack(db, at));
+                else songArtists.push(toSongArtist(at));
             }
         }
 
-        const danceId = new ObjectId();
+        // ldco ids are strings (ldco-database decision 5), never ObjectIds
+        const danceId = new ObjectId().toHexString();
         const allTrackIds = [...new Set([primaryTrackId, ...additionalTrackIds].filter(Boolean))];
 
         await db.collection("dances").insertOne({
-            _id: danceId,
+            _id: danceId as never,
             danceName: overrides.danceName.trim(),
             choreographers: choreographerIds,
             stepsheet: overrides?.stepsheetUrl?.trim() || "",
             difficulty: overrides?.difficulty?.trim() || "Beginner",
             primaryTrack: primaryTrackId,
             tracks: allTrackIds,
+            ...(songArtists.length ? { songArtists } : {}),
         });
 
-        return NextResponse.json({ ok: true, danceId: danceId.toHexString() });
+        return NextResponse.json({ ok: true, danceId });
     } catch (e: unknown) {
         return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
     }
