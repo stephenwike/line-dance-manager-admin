@@ -12,6 +12,7 @@ interface IncompleteDance {
     stepsheet: string;
     primaryTrack: string;
     primaryTrackName: string | null;
+    songArtists: { song: string; artist: string }[];
     missing: Missing[];
 }
 
@@ -102,12 +103,19 @@ function TrackPanel({ dance, onSave, onClose }: {
     onSave: (track: object) => Promise<void>;
     onClose: () => void;
 }) {
-    const [query, setQuery] = useState("");
+    const hint = dance.songArtists?.[0];
+    const initialQuery = hint ? `${hint.song} ${hint.artist}` : "";
+    const [query, setQuery] = useState(initialQuery);
     const [searching, setSearching] = useState(false);
     const [results, setResults] = useState<SpotifyTrack[]>([]);
     const [spotifyUrl, setSpotifyUrl] = useState("");
     const [saving, setSaving] = useState<string | null>(null);
     const [error, setError] = useState("");
+
+    useEffect(() => {
+        if (initialQuery) search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     async function search() {
         if (!query.trim()) return;
@@ -172,7 +180,7 @@ function TrackPanel({ dance, onSave, onClose }: {
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && search()}
-                    placeholder={`Search "${dance.danceName}" on Spotify…`}
+                    placeholder={hint ? `${hint.song} ${hint.artist}` : `Search "${dance.danceName}" on Spotify…`}
                     autoFocus
                     style={{
                         flex: 1, padding: "8px 12px", borderRadius: 8,
@@ -385,6 +393,12 @@ export default function IncompleteDancesPage() {
                                             {dance.choreographerNames.length > 0
                                                 ? dance.choreographerNames.join(", ")
                                                 : "Unknown choreographer"}
+                                            {dance.stepsheet && (
+                                                <a href={dance.stepsheet} target="_blank" rel="noopener noreferrer"
+                                                    style={{ marginLeft: 8, color: "var(--accent)", textDecoration: "none", fontSize: 11 }}>
+                                                    ↗ stepsheet
+                                                </a>
+                                            )}
                                         </p>
                                     </div>
 

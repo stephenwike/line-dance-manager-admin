@@ -51,6 +51,7 @@ export async function GET() {
             stepsheet,
             primaryTrack,
             primaryTrackName: primaryTrack ? (trackMap.get(primaryTrack) ?? null) : null,
+            songArtists: (d.songArtists as { song: string; artist: string }[]) ?? [],
             missing,
         };
     }));

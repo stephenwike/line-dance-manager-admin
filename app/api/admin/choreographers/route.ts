@@ -19,5 +19,9 @@ export async function GET(req: NextRequest) {
         .limit(10)
         .toArray();
 
-    return NextResponse.json(results.map((c) => ({ id: c._id.toString(), name: c.name })));
+    return NextResponse.json(results.map((c) => ({
+        id: c._id.toString(),
+        name: c.name,
+        copperknobUrl: (c.copperknobUrl as string) ?? null,
+    })));
 }
