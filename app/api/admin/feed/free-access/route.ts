@@ -62,6 +62,35 @@ export async function POST(req: Request) {
     }
 }
 
+export async function PATCH(req: Request) {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    try {
+        const body = await req.json().catch(() => ({}));
+        const id = String(body.id ?? "").trim();
+        if (!ObjectId.isValid(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+
+        let expiresAt: Date | null = null;
+        if (body.expiresAt) {
+            const d = new Date(body.expiresAt);
+            if (isNaN(d.getTime())) return NextResponse.json({ error: "Invalid expiresAt date" }, { status: 400 });
+            expiresAt = d;
+        }
+
+        const db = await getFeedDb();
+        const result = await db.collection("free_access").updateOne(
+            { _id: new ObjectId(id) },
+            { $set: { expiresAt } }
+        );
+        if (result.matchedCount === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        return NextResponse.json({ ok: true, expiresAt: expiresAt ? expiresAt.toISOString() : null });
+    } catch (e: unknown) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    }
+}
+
 export async function DELETE(req: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -105,6 +105,9 @@ export default function FeedFreeAccessPage() {
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState<string | null>(null);
     const [removing, setRemoving] = useState<string | null>(null);
+    const [renewing, setRenewing] = useState<string | null>(null);
+    const [renewDate, setRenewDate] = useState("");
+    const [renewSaving, setRenewSaving] = useState(false);
     const [filter, setFilter] = useState<"all" | "active" | "expired">("active");
 
     useEffect(() => {
@@ -129,6 +132,35 @@ export default function FeedFreeAccessPage() {
             alert(e instanceof Error ? e.message : String(e));
         } finally {
             setRemoving(null);
+        }
+    }
+
+    function startRenew(id: string) {
+        const oneYear = new Date();
+        oneYear.setFullYear(oneYear.getFullYear() + 1);
+        setRenewDate(oneYear.toISOString().slice(0, 10));
+        setRenewing(id);
+    }
+
+    async function confirmRenew(id: string) {
+        if (!renewDate) return;
+        setRenewSaving(true);
+        try {
+            const res = await fetch("/api/admin/feed/free-access", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id, expiresAt: renewDate }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error ?? "Failed");
+            setEntries((prev) => prev.map((e) =>
+                e._id === id ? { ...e, expiresAt: data.expiresAt } : e
+            ));
+            setRenewing(null);
+        } catch (e: unknown) {
+            alert(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRenewSaving(false);
         }
     }
 
@@ -185,60 +217,99 @@ export default function FeedFreeAccessPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 0, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
                     {visible.map((entry, i) => {
                         const active = isActive(entry);
+                        const isRenewing = renewing === entry._id;
                         return (
                             <div key={entry._id} style={{
-                                display: "flex", alignItems: "center", gap: 14, padding: "12px 16px",
                                 background: "var(--surface)",
                                 borderBottom: i < visible.length - 1 ? "1px solid var(--border)" : "none",
                             }}>
-                                {/* Status dot */}
-                                <div style={{
-                                    width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                                    background: active ? "var(--success)" : "var(--text-disabled)",
-                                }} />
+                                <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px" }}>
+                                    {/* Status dot */}
+                                    <div style={{
+                                        width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                                        background: active ? "var(--success)" : "var(--text-disabled)",
+                                    }} />
 
-                                {/* Email + note */}
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                        {entry.email}
-                                    </p>
-                                    {entry.note && (
-                                        <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>{entry.note}</p>
-                                    )}
+                                    {/* Email + note */}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                            {entry.email}
+                                        </p>
+                                        {entry.note && (
+                                            <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>{entry.note}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Expiry */}
+                                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                        {entry.expiresAt ? (
+                                            <>
+                                                <p style={{ fontSize: 11, color: active ? "var(--text-secondary)" : "var(--danger)", fontWeight: active ? 400 : 600 }}>
+                                                    {active ? "Expires" : "Expired"}
+                                                </p>
+                                                <p style={{ fontSize: 12, color: active ? "var(--text-primary)" : "var(--danger)" }}>
+                                                    {fmtDate(entry.expiresAt)}
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <span style={{ fontSize: 12, color: "var(--success-text)", fontWeight: 600, background: "var(--success-subtle)", padding: "2px 8px", borderRadius: 20 }}>
+                                                Permanent
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Added */}
+                                    <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
+                                        <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Added</p>
+                                        <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{fmtDate(entry.createdAt)}</p>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "center" }}>
+                                        {!active && (
+                                            <button
+                                                onClick={() => isRenewing ? setRenewing(null) : startRenew(entry._id)}
+                                                style={{ fontSize: 12, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: "4px 0", textDecoration: "underline" }}
+                                            >
+                                                {isRenewing ? "Cancel" : "Renew"}
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => remove(entry._id)}
+                                            disabled={removing === entry._id}
+                                            style={{ fontSize: 12, color: "var(--danger)", background: "none", border: "none", cursor: removing === entry._id ? "wait" : "pointer", padding: "4px 0", textDecoration: "underline" }}
+                                        >
+                                            {removing === entry._id ? "…" : "Remove"}
+                                        </button>
+                                    </div>
                                 </div>
 
-                                {/* Expiry */}
-                                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                    {entry.expiresAt ? (
-                                        <>
-                                            <p style={{ fontSize: 11, color: active ? "var(--text-secondary)" : "var(--danger)", fontWeight: active ? 400 : 600 }}>
-                                                {active ? "Expires" : "Expired"}
-                                            </p>
-                                            <p style={{ fontSize: 12, color: active ? "var(--text-primary)" : "var(--danger)" }}>
-                                                {fmtDate(entry.expiresAt)}
-                                            </p>
-                                        </>
-                                    ) : (
-                                        <span style={{ fontSize: 12, color: "var(--success-text)", fontWeight: 600, background: "var(--success-subtle)", padding: "2px 8px", borderRadius: 20 }}>
-                                            Permanent
-                                        </span>
-                                    )}
-                                </div>
-
-                                {/* Added */}
-                                <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
-                                    <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Added</p>
-                                    <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{fmtDate(entry.createdAt)}</p>
-                                </div>
-
-                                {/* Remove */}
-                                <button
-                                    onClick={() => remove(entry._id)}
-                                    disabled={removing === entry._id}
-                                    style={{ fontSize: 12, color: "var(--danger)", background: "none", border: "none", cursor: removing === entry._id ? "wait" : "pointer", flexShrink: 0, padding: "4px 0", textDecoration: "underline" }}
-                                >
-                                    {removing === entry._id ? "…" : "Remove"}
-                                </button>
+                                {/* Inline renew form */}
+                                {isRenewing && (
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px 12px 38px", borderTop: "1px solid var(--border)", background: "var(--surface-raised)" }}>
+                                        <input
+                                            type="date"
+                                            value={renewDate}
+                                            onChange={(e) => setRenewDate(e.target.value)}
+                                            autoFocus
+                                            style={{ ...inputStyle, width: "auto", flex: "0 0 160px" }}
+                                        />
+                                        <button
+                                            onClick={() => confirmRenew(entry._id)}
+                                            disabled={renewSaving || !renewDate}
+                                            style={{
+                                                padding: "7px 16px", borderRadius: 8, border: "none",
+                                                background: "var(--accent)", color: "#fff",
+                                                fontSize: 12, fontWeight: 600,
+                                                cursor: renewSaving ? "wait" : "pointer",
+                                                opacity: !renewDate ? 0.5 : 1,
+                                            }}
+                                        >
+                                            {renewSaving ? "Saving…" : "Confirm"}
+                                        </button>
+                                        <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>New expiry for {entry.email}</span>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
