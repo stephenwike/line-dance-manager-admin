@@ -46,6 +46,11 @@ export async function getBldDb() {
     return getDb(process.env.BLD_DB_NAME ?? "bld");
 }
 
+/** Instructor schedule database (decision 18); also holds social_posts from beyond-line-dance-webhooks */
+export async function getLessonsDb() {
+    return getDb(process.env.LESSONS_DB_NAME ?? "ldco-lessons");
+}
+
 /** Events database (special event registrations, event metadata) */
 export async function getEventsDb() {
     return getDb(process.env.EVENTS_DB_NAME ?? "ldco-events");

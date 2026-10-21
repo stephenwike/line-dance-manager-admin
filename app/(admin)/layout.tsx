@@ -30,6 +30,7 @@ const BASE_NAV = [
     { href: "/lesson-overview", label: "Lesson Overview", icon: "📋", section: null },
     { href: "/add-taught-lesson", label: "Add Taught Lesson", icon: "✏️", section: null },
     { href: "/commit-lessons", label: "Mark as Taught", icon: "✅", section: null },
+    { href: "/social-posts", label: "Social Posts", icon: "📣", section: "Social" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
