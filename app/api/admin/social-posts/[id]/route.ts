@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getLessonsDb } from "@/lib/db";
+import { getBldDb } from "@/lib/db";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -34,7 +34,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
-    const col = (await getLessonsDb()).collection<{ _id: string; [k: string]: unknown }>("social_posts");
+    const col = (await getBldDb()).collection<{ _id: string; [k: string]: unknown }>("social_posts");
     const post = await col.findOne({ _id: id });
     if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const now = new Date();

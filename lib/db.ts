@@ -41,12 +41,12 @@ export async function getFeedDb() {
     return getDb(process.env.FEED_DB_NAME ?? "djfeed");
 }
 
-/** Beyond Line Dance scheduling database */
+/** Beyond Line Dance only data (decision 19): social_posts from beyond-line-dance-webhooks */
 export async function getBldDb() {
     return getDb(process.env.BLD_DB_NAME ?? "bld");
 }
 
-/** Instructor schedule database (decision 18); also holds social_posts from beyond-line-dance-webhooks */
+/** Instructor schedule database (decision 18) */
 export async function getLessonsDb() {
     return getDb(process.env.LESSONS_DB_NAME ?? "ldco-lessons");
 }
