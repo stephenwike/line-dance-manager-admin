@@ -1,5 +1,5 @@
 import { ObjectId, type Db } from "mongodb";
-import { getDb, getMainDb } from "@/lib/db";
+import { getLessonsDb, getMainDb } from "@/lib/db";
 
 // Stephen's schedule lives in ldco-lessons, the database every instructor shares (ldco-database decisions
 // 18 and 19). These BLD pages are Stephen's: they show and change only the event types linked to his
@@ -13,9 +13,8 @@ export const BLD_INSTRUCTOR_ID = process.env.BLD_INSTRUCTOR_ID ?? "f5e37f5a-e74e
 export const BLD_USER_ID = process.env.BLD_USER_ID ?? "66919a36bfcd4d848099f2ba";
 export const DEFAULT_TIME_ZONE = "America/Denver";
 
-export async function getLessonsDb(): Promise<Db> {
-    return getDb(process.env.LESSONS_DB_NAME ?? "ldco-lessons");
-}
+// The database accessor lives in lib/db.ts; re-exported so the BLD routes import everything from here.
+export { getLessonsDb };
 
 export function newId(): string {
     return new ObjectId().toHexString();
