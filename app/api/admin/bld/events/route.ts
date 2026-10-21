@@ -1,26 +1,15 @@
 import { NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/auth";
-import { getBldDb } from "@/lib/db";
 import { isYmd, parseTime12ToMinutes } from "@/lib/time";
+import { BLD_USER_ID, eventInstants, getLessonsDb, isId, isMyEventType, lessonsFromPage, newId, venueTimeZone, type StoredEvent } from "@/lib/lessons";
 
 function clean(v: unknown): string | null {
     const s = String(v ?? "").trim();
     return s.length ? s : null;
 }
 
-function normalizeLessons(input: unknown) {
-    if (!Array.isArray(input)) return [];
-    return input.map((l) => ({
-        time: clean(l?.time),
-        danceId: clean(l?.danceId),
-        dance: clean(l?.dance),
-        level: clean(l?.level),
-        link: clean(l?.link),
-        committed: false,
-    }));
-}
-
+// POST: create or update the stored event for an event type on a date (one per date, as the site and the
+// instructor dashboard match them).
 export async function POST(req: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,9 +25,8 @@ export async function POST(req: Request) {
         const cancelNote = clean(body.cancelNote);
         const substitute = clean(body.substitute);
         const specialNote = clean(body.specialNote);
-        const lessons = normalizeLessons(body.lessons);
 
-        if (!ObjectId.isValid(eventTypeId)) return NextResponse.json({ error: "Invalid eventTypeId" }, { status: 400 });
+        if (!isId(eventTypeId)) return NextResponse.json({ error: "Invalid eventTypeId" }, { status: 400 });
         if (!isYmd(date)) return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 });
 
         const startM = parseTime12ToMinutes(startTime);
@@ -47,31 +35,33 @@ export async function POST(req: Request) {
         if (endM === null) return NextResponse.json({ error: "endTime must be like '8:00 PM'" }, { status: 400 });
         if (endM <= startM) return NextResponse.json({ error: "endTime must be after startTime" }, { status: 400 });
 
-        const durationMinutes = endM - startM;
-        const db = await getBldDb();
-        const etId = new ObjectId(eventTypeId);
+        const db = await getLessonsDb();
+        if (!(await isMyEventType(db, eventTypeId))) return NextResponse.json({ error: "Event type not found" }, { status: 404 });
+        const et = await db.collection<{ _id: string; venueId?: string }>("event_types").findOne({ _id: eventTypeId });
+        if (!et) return NextResponse.json({ error: "Event type not found" }, { status: 404 });
 
-        const exists = await db.collection("event_types").findOne({ _id: etId });
-        if (!exists) return NextResponse.json({ error: "Event type not found" }, { status: 404 });
+        const timeZone = await venueTimeZone(et.venueId);
+        const times = eventInstants(date, startTime, endTime, timeZone)!;
+        const events = db.collection<StoredEvent & { _id: string }>("events");
+        const existing = await events.findOne({ eventTypeId, date });
+        const lessons = lessonsFromPage(body.lessons, { date, ...times, timeZone }, existing?.lessons ?? []).map((l) => ({ ...l, committed: false }));
+        const now = new Date();
 
-        const filter = { eventTypeId: etId, date, startTime };
-        const update = {
-            $setOnInsert: { eventTypeId: etId, date, startTime },
-            $set: { endTime, durationMinutes, isCancelled, cancelNote, substitute, specialNote, lessons, updatedAt: new Date() },
-        };
+        const res = await events.updateOne(
+            { eventTypeId, date },
+            {
+                $setOnInsert: { _id: newId(), eventTypeId, date, substituteInstructorId: null, createdAt: now },
+                $set: {
+                    ...times, timeZone, isCancelled, cancelNote, substitute, specialNote, lessons,
+                    updatedAt: now, verifiedAt: now, verifiedBy: BLD_USER_ID,
+                },
+            },
+            { upsert: true },
+        );
 
-        const res = await db.collection("events").updateOne(filter, update, { upsert: true });
-
-        let eventId: string | null = null;
-        if (res.upsertedId) {
-            eventId = String(res.upsertedId);
-        } else {
-            const doc = await db.collection("events").findOne(filter, { projection: { _id: 1 } });
-            eventId = doc?._id ? String(doc._id) : null;
-        }
-
-        if (!eventId) return NextResponse.json({ error: "Failed to resolve eventId" }, { status: 500 });
-        return NextResponse.json({ ok: true, eventId, created: !!res.upsertedId });
+        const doc = await events.findOne({ eventTypeId, date }, { projection: { _id: 1 } });
+        if (!doc) return NextResponse.json({ error: "Failed to resolve eventId" }, { status: 500 });
+        return NextResponse.json({ ok: true, eventId: String(doc._id), created: !!res.upsertedId });
     } catch (e: unknown) {
         return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
     }

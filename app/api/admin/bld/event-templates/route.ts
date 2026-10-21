@@ -1,21 +1,10 @@
 import { NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/auth";
-import { getBldDb } from "@/lib/db";
+import { getLessonsDb, isId, isMyEventType, myEventTypeIds, newId, templateLessonsForPage, templateLessonsFromPage } from "@/lib/lessons";
 
 function clean(v: unknown): string | null {
     const s = String(v ?? "").trim();
     return s.length ? s : null;
-}
-
-function normalizeLessons(input: unknown) {
-    if (!Array.isArray(input)) return [];
-    return input.map((l) => ({
-        time: clean(l?.time),
-        dance: clean(l?.dance),
-        level: clean(l?.level),
-        link: clean(l?.link),
-    }));
 }
 
 export async function GET(req: Request) {
@@ -25,11 +14,10 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const eventTypeId = searchParams.get("eventTypeId");
 
-    const db = await getBldDb();
-    const filter: Record<string, unknown> = {};
-    if (eventTypeId && ObjectId.isValid(eventTypeId)) {
-        filter.eventTypeId = new ObjectId(eventTypeId);
-    }
+    const db = await getLessonsDb();
+    const mine = await myEventTypeIds(db);
+    const filter: Record<string, unknown> = { eventTypeId: { $in: mine } };
+    if (isId(eventTypeId)) filter.eventTypeId = mine.includes(eventTypeId) ? eventTypeId : "__none__";
 
     const docs = await db.collection("event_templates").find(filter)
         .sort({ eventTypeId: 1, name: 1 })
@@ -40,7 +28,7 @@ export async function GET(req: Request) {
         eventTypeId: String(d.eventTypeId),
         name: d.name ?? "",
         isDefault: !!d.isDefault,
-        lessons: Array.isArray(d.lessons) ? d.lessons : [],
+        lessons: templateLessonsForPage(d.lessons),
     })));
 }
 
@@ -52,32 +40,35 @@ export async function POST(req: Request) {
     const eventTypeId = clean(body.eventTypeId);
     const name = clean(body.name);
 
-    if (!eventTypeId || !ObjectId.isValid(eventTypeId)) {
+    if (!eventTypeId || !isId(eventTypeId)) {
         return NextResponse.json({ error: "Invalid eventTypeId" }, { status: 400 });
     }
     if (!name) {
         return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
 
-    const isDefault = !!body.isDefault;
-    const db = await getBldDb();
-    const etOid = new ObjectId(eventTypeId);
+    const db = await getLessonsDb();
+    if (!(await isMyEventType(db, eventTypeId))) return NextResponse.json({ error: "Event type not found" }, { status: 404 });
 
+    const isDefault = !!body.isDefault;
     if (isDefault) {
         await db.collection("event_templates").updateMany(
-            { eventTypeId: etOid, isDefault: true },
+            { eventTypeId, isDefault: true },
             { $set: { isDefault: false } }
         );
     }
 
-    const result = await db.collection("event_templates").insertOne({
-        eventTypeId: etOid,
+    const _id = newId();
+    const now = new Date();
+    await db.collection<{ _id: string; [key: string]: unknown }>("event_templates").insertOne({
+        _id,
+        eventTypeId,
         name,
         isDefault,
-        lessons: normalizeLessons(body.lessons),
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        lessons: templateLessonsFromPage(body.lessons),
+        createdAt: now,
+        updatedAt: now,
     });
 
-    return NextResponse.json({ ok: true, _id: String(result.insertedId) });
+    return NextResponse.json({ ok: true, _id });
 }

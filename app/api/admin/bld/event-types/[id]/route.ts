@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/auth";
-import { getBldDb } from "@/lib/db";
 import { getVenue } from "@/lib/venues";
+import { BLD_USER_ID, getLessonsDb, isId, isMyEventType, to12h, to24h } from "@/lib/lessons";
 
 function clean(v: unknown) {
     return typeof v === "string" ? v.trim() : "";
@@ -13,10 +12,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = await params;
-    if (!ObjectId.isValid(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    if (!isId(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const db = await getBldDb();
-    const doc = await db.collection("event_types").findOne({ _id: new ObjectId(id) });
+    const db = await getLessonsDb();
+    if (!(await isMyEventType(db, id))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const doc = await db.collection<{ _id: string; [key: string]: unknown }>("event_types").findOne({ _id: id });
     if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     return NextResponse.json({
@@ -25,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         level: doc.level ?? "",
         price: doc.price ?? "",
         venueId: doc.venueId ? String(doc.venueId) : null,
-        defaultStartTime: doc.defaultStartTime ?? "",
+        defaultStartTime: to12h(doc.defaultStartTime),
         defaultDurationMinutes: doc.defaultDurationMinutes ?? 0,
         isActive: !!doc.isActive,
     });
@@ -36,7 +36,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = await params;
-    if (!ObjectId.isValid(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    if (!isId(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     try {
         const body = await req.json().catch(() => ({}));
@@ -45,7 +45,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const venueId = clean(body.venueId);
         const level = clean(body.level);
         const price = clean(body.price);
-        const defaultStartTime = clean(body.defaultStartTime);
+        const defaultStartTime = to24h(body.defaultStartTime);
         const defaultDurationMinutes = Number(body.defaultDurationMinutes ?? 0);
         const isActive = typeof body.isActive === "boolean" ? body.isActive : true;
 
@@ -53,10 +53,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (!venueId) return NextResponse.json({ error: "A venue is required" }, { status: 400 });
         if (!(await getVenue(venueId))) return NextResponse.json({ error: "Venue not found" }, { status: 404 });
 
-        const db = await getBldDb();
-        const result = await db.collection("event_types").updateOne(
-            { _id: new ObjectId(id) },
-            { $set: { title, level, price, venueId, defaultStartTime, defaultDurationMinutes, isActive, updatedAt: new Date() } }
+        const db = await getLessonsDb();
+        if (!(await isMyEventType(db, id))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        const now = new Date();
+        const result = await db.collection<{ _id: string; [key: string]: unknown }>("event_types").updateOne(
+            { _id: id },
+            // Editing it is the instructor's activity, so it's validated (decision 17).
+            { $set: { title, level, price, venueId, defaultStartTime, defaultDurationMinutes, isActive, updatedAt: now, verifiedAt: now, verifiedBy: BLD_USER_ID } },
         );
 
         if (result.matchedCount === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });

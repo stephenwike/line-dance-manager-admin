@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/auth";
-import { getBldDb } from "@/lib/db";
 import { endTimeFromStartAndDuration } from "@/lib/time";
+import { DEFAULT_TIME_ZONE, eventTimesForPage, getLessonsDb, lessonForPage, myEventTypeIds, to12h, type StoredEvent } from "@/lib/lessons";
 
 type DOW = "SU" | "MO" | "TU" | "WE" | "TH" | "FR" | "SA";
 const DOW_INDEX: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
@@ -31,15 +30,18 @@ function nthWeekdayOfMonth(year: number, month: number, weekday: number, nth: nu
     return candidate.getMonth() === month ? candidate : null;
 }
 
-function computeStatus(ev: Record<string, unknown> | undefined): "UNPLANNED" | "PLANNED" | "CANCELLED" {
+type PageLesson = ReturnType<typeof lessonForPage>;
+
+function computeStatus(ev: { isCancelled?: boolean; lessons: PageLesson[] } | undefined): "UNPLANNED" | "PLANNED" | "CANCELLED" {
     if (!ev) return "UNPLANNED";
     if (ev.isCancelled) return "CANCELLED";
-    const lessons = Array.isArray(ev.lessons) ? ev.lessons : [];
-    if (lessons.length === 0) return "UNPLANNED";
-    if (lessons.some((l: Record<string, unknown>) => !String(l?.dance ?? "").trim())) return "UNPLANNED";
+    if (ev.lessons.length === 0) return "UNPLANNED";
+    if (ev.lessons.some((l) => !String(l?.dance ?? "").trim())) return "UNPLANNED";
     return "PLANNED";
 }
 
+// GET ?from&to[&onlyUnplanned=true]: Stephen's dates in a range, projected from running frequencies and
+// matched to stored events, with "5:00 PM"-style times for the planning pages.
 export async function GET(req: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -57,54 +59,47 @@ export async function GET(req: Request) {
     const rangeEnd = new Date(to + "T00:00:00");
 
     try {
-        const db = await getBldDb();
+        const db = await getLessonsDb();
+        const mine = await myEventTypeIds(db);
 
         const [etDocs, freqDocs, eventDocs] = await Promise.all([
-            db.collection("event_types").find({ isActive: true })
+            db.collection("event_types").find({ _id: { $in: mine }, isActive: { $ne: false } } as never)
                 .project({ title: 1, level: 1, price: 1, venueId: 1 }).toArray(),
-            db.collection("frequencies").find({ isActive: true }).toArray(),
-            db.collection("events").find({ date: { $gte: from, $lte: to } })
-                .project({ _id: 1, eventTypeId: 1, date: 1, startTime: 1, endTime: 1, isCancelled: 1, cancelNote: 1, substitute: 1, lessons: 1 }).toArray(),
+            db.collection("frequencies").find({ eventTypeId: { $in: mine }, isActive: { $ne: false } }).toArray(),
+            db.collection<StoredEvent & { _id: string }>("events").find({ eventTypeId: { $in: mine }, date: { $gte: from, $lte: to } }).toArray(),
         ]);
 
         const etById = new Map(etDocs.map((et) => [String(et._id), et]));
-        const activeEtIds = new Set(etDocs.map((et) => String(et._id)));
 
-        const eventByKey = new Map<string, Record<string, unknown>>();
-        const eventByDateKey = new Map<string, Record<string, unknown>>();
-        for (const ev of eventDocs) {
-            eventByKey.set(`${String(ev.eventTypeId)}|${ev.date}|${ev.startTime}`, ev as Record<string, unknown>);
-            eventByDateKey.set(`${String(ev.eventTypeId)}|${ev.date}`, ev as Record<string, unknown>);
-        }
+        // Stored events by event type and date (one per date)
+        const eventByDateKey = new Map<string, StoredEvent & { _id: string }>();
+        for (const ev of eventDocs) eventByDateKey.set(`${ev.eventTypeId}|${ev.date}`, ev);
 
-        const occurrences: Record<string, unknown>[] = [];
+        const occurrences: Array<Record<string, unknown> & { key: string; eventTypeId: string; date: string; startTime: string }> = [];
 
         for (const f of freqDocs) {
-            const etId = String(f.eventTypeId instanceof ObjectId ? f.eventTypeId : new ObjectId(String(f.eventTypeId)));
-            if (!activeEtIds.has(etId)) continue;
+            const etId = String(f.eventTypeId);
+            const et = etById.get(etId);
+            if (!et) continue;
 
             const { start, end } = clampRange(rangeStart, rangeEnd, f.startDate, f.endDate ?? null);
             if (start > end) continue;
 
-            const et = etById.get(etId)!;
-            const calcEndTime = endTimeFromStartAndDuration(f.startTime, f.durationMinutes);
-
+            const startTime = to12h(f.startTime);
             const makeOcc = (date: string) => ({
-                key: `${etId}|${date}|${f.startTime}`,
+                key: `${etId}|${date}|${startTime}`,
                 eventTypeId: etId,
                 frequencyId: String(f._id),
                 date,
-                startTime: f.startTime,
-                endTime: calcEndTime,
+                startTime,
+                endTime: endTimeFromStartAndDuration(startTime, f.durationMinutes),
                 durationMinutes: f.durationMinutes,
                 eventType: { _id: etId, title: et.title, level: et.level, price: et.price, venueId: et.venueId ? String(et.venueId) : null },
             });
 
             if (f.kind === "WEEKLY") {
-                const wanted = new Set((f.byDay as DOW[] ?? []).map((d) => DOW_INDEX[d]));
-                for (const d of eachDay(start, end)) {
-                    if (wanted.has(d.getDay())) occurrences.push(makeOcc(ymd(d)));
-                }
+                const wanted = new Set(((f.byDay as DOW[]) ?? []).map((d) => DOW_INDEX[d]));
+                for (const d of eachDay(start, end)) if (wanted.has(d.getDay())) occurrences.push(makeOcc(ymd(d)));
             }
 
             if (f.kind === "MONTHLY_NTH_WEEKDAY") {
@@ -125,32 +120,29 @@ export async function GET(req: Request) {
 
         const out = occurrences
             .map((o) => {
-                const ev = eventByKey.get(o.key as string)
-                    ?? eventByDateKey.get(`${o.eventTypeId as string}|${o.date as string}`);
-                const status = computeStatus(ev);
-                const row = {
-                    key: o.key as string,
-                    eventTypeId: o.eventTypeId as string,
+                const ev = eventByDateKey.get(`${o.eventTypeId}|${o.date}`);
+                const tz = ev?.timeZone || DEFAULT_TIME_ZONE;
+                const lessons = (ev?.lessons ?? []).map((l) => lessonForPage(l, tz));
+                const times = ev ? eventTimesForPage(ev) : null;
+                return {
+                    key: o.key,
+                    eventTypeId: o.eventTypeId,
                     frequencyId: o.frequencyId as string,
-                    date: o.date as string,
-                    startTime: o.startTime as string,
+                    date: o.date,
+                    startTime: o.startTime,
                     durationMinutes: o.durationMinutes as number,
                     eventType: o.eventType,
-                    eventId: ev?._id ? String(ev._id as ObjectId) : null,
-                    endTime: (ev?.endTime as string | undefined) ?? (o.endTime as string | null),
+                    eventId: ev?._id ?? null,
+                    endTime: times?.endTime ?? (o.endTime as string | null),
                     isCancelled: !!ev?.isCancelled,
-                    cancelNote: (ev?.cancelNote as string | null) ?? null,
-                    substitute: (ev?.substitute as string | null) ?? null,
-                    lessons: Array.isArray(ev?.lessons) ? ev.lessons : [],
-                    status,
+                    cancelNote: ev?.cancelNote ?? null,
+                    substitute: ev?.substitute ?? null,
+                    lessons,
+                    status: computeStatus(ev ? { isCancelled: ev.isCancelled, lessons } : undefined),
                 };
-                return row;
             })
-            .filter((x) => onlyUnplanned ? x.status === "UNPLANNED" : true)
-            .sort((a, b) => {
-                if (a.date !== b.date) return a.date.localeCompare(b.date);
-                return a.startTime.localeCompare(b.startTime);
-            });
+            .filter((x) => (onlyUnplanned ? x.status === "UNPLANNED" : true))
+            .sort((a, b) => (a.date !== b.date ? a.date.localeCompare(b.date) : a.startTime.localeCompare(b.startTime)));
 
         return NextResponse.json(out);
     } catch (e: unknown) {

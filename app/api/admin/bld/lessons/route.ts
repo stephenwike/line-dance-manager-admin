@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getBldDb } from "@/lib/db";
+import { getMainDb } from "@/lib/db";
+import { BLD_INSTRUCTOR_ID, getLessonsDb, newId } from "@/lib/lessons";
 
 function isIsoLike(s: string) {
     return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?([+-]\d{2}:\d{2}|Z)$/.test(s);
@@ -8,7 +9,7 @@ function isIsoLike(s: string) {
 
 // POST /api/admin/bld/lessons
 // Body: { venue, date (ISO with offset), danceId?, danceName? }
-// Inserts a taught lesson directly into the lessons collection (no event plan required).
+// Adds a taught lesson straight to the history (ldco-lessons.lessons), with no event plan behind it.
 export async function POST(req: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,12 +35,20 @@ export async function POST(req: Request) {
             );
         }
 
-        const db = await getBldDb();
-        const doc: Record<string, unknown> = { venue, date };
-        if (danceId) doc.danceId = danceId;
-        else doc.danceName = danceName;
+        // The page sends the venue's name; record its id too when the name matches a venue.
+        const match = await (await getMainDb()).collection<{ _id: string; [key: string]: unknown }>("venues").findOne({ venuename: venue }, { projection: { _id: 1 } });
 
-        await db.collection("lessons").insertOne(doc);
+        const db = await getLessonsDb();
+        await db.collection<{ _id: string; [key: string]: unknown }>("lessons").insertOne({
+            _id: newId(),
+            ...(danceId ? { danceId } : { danceName }),
+            venue,
+            date: new Date(date),
+            instructorId: BLD_INSTRUCTOR_ID,
+            venueId: match ? String(match._id) : null,
+            eventId: null,
+            lessonId: null,
+        });
 
         return NextResponse.json({ ok: true });
     } catch (e: unknown) {

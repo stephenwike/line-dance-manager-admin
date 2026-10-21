@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/auth";
-import { getBldDb } from "@/lib/db";
 import { getVenue, venueName } from "@/lib/venues";
-import { endTimeFromStartAndDuration } from "@/lib/time";
+import {
+    BLD_USER_ID,
+    DEFAULT_TIME_ZONE,
+    eventInstants,
+    eventTimesForPage,
+    getLessonsDb,
+    isId,
+    isMyEventType,
+    lessonForPage,
+    lessonsFromPage,
+    recordTaught,
+    type StoredEvent,
+} from "@/lib/lessons";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -12,39 +22,11 @@ function clean(v: unknown): string | null {
     return s.length ? s : null;
 }
 
-function normalizeLessons(input: unknown) {
-    if (!Array.isArray(input)) return [];
-    return input.map((l) => ({
-        time: clean(l?.time),
-        danceId: clean(l?.danceId),
-        dance: clean(l?.dance),
-        level: clean(l?.level),
-        link: clean(l?.link),
-        committed: typeof l?.committed === "boolean" ? l.committed : false,
-    }));
-}
-
-function lessonTimeToIso(date: string, time: string | null): string {
-    if (!time) return `${date}T00:00:00-07:00`;
-    const m = time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-    if (!m) return `${date}T00:00:00-07:00`;
-    let hh = Number(m[1]);
-    const mm = Number(m[2]);
-    if (m[3].toUpperCase() === "PM" && hh !== 12) hh += 12;
-    if (m[3].toUpperCase() === "AM" && hh === 12) hh = 0;
-    return `${date}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00-07:00`;
-}
-
-async function resolveVenueName(db: Awaited<ReturnType<typeof getBldDb>>, eventTypeId: unknown): Promise<string> {
-    try {
-        const etId = eventTypeId ? new ObjectId(String(eventTypeId)) : null;
-        if (!etId) return "Unknown venue";
-        const et = await db.collection("event_types").findOne({ _id: etId });
-        if (!et?.venueId) return "Unknown venue";
-        return await venueName(et.venueId);
-    } catch {
-        return "Unknown venue";
-    }
+async function loadMine(id: string) {
+    const db = await getLessonsDb();
+    const ev = await db.collection<StoredEvent & { _id: string }>("events").findOne({ _id: id });
+    if (!ev || !ev.eventTypeId || !(await isMyEventType(db, ev.eventTypeId))) return { db, ev: null };
+    return { db, ev };
 }
 
 export async function GET(_req: Request, { params }: Ctx) {
@@ -52,39 +34,26 @@ export async function GET(_req: Request, { params }: Ctx) {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = await params;
-    if (!ObjectId.isValid(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    if (!isId(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const db = await getBldDb();
-    const ev = await db.collection("events").findOne({ _id: new ObjectId(id) });
+    const { db, ev } = await loadMine(id);
     if (!ev) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const etId = ev.eventTypeId ? new ObjectId(String(ev.eventTypeId)) : null;
-    const [eventType, venue] = await (async () => {
-        if (!etId) return [null, null];
-        const et = await db.collection("event_types").findOne({ _id: etId });
-        if (!et) return [null, null];
-        const v = et.venueId ? await getVenue(et.venueId) : null;
-        return [et, v];
-    })();
-
-    const startTime = ev.startTime ?? "";
-    const computedEnd = typeof ev.durationMinutes === "number" && ev.durationMinutes > 0
-        ? endTimeFromStartAndDuration(startTime, ev.durationMinutes)
-        : "";
+    const et = await db.collection<{ _id: string; title?: string; level?: string; price?: string; venueId?: string }>("event_types").findOne({ _id: ev.eventTypeId! });
+    const venue = et?.venueId ? await getVenue(et.venueId) : null;
+    const tz = ev.timeZone || DEFAULT_TIME_ZONE;
 
     return NextResponse.json({
         _id: String(ev._id),
-        eventTypeId: ev.eventTypeId ? String(ev.eventTypeId) : "",
+        eventTypeId: ev.eventTypeId ?? "",
         date: ev.date ?? "",
-        startTime,
-        endTime: ev.endTime ?? computedEnd,
-        durationMinutes: ev.durationMinutes ?? 0,
+        ...eventTimesForPage(ev),
         isCancelled: !!ev.isCancelled,
         cancelNote: ev.cancelNote ?? null,
         substitute: ev.substitute ?? null,
         specialNote: ev.specialNote ?? null,
-        lessons: Array.isArray(ev.lessons) ? ev.lessons : [],
-        eventType: eventType ? { _id: String(eventType._id), title: eventType.title ?? "", level: eventType.level ?? "", price: eventType.price ?? "" } : null,
+        lessons: (ev.lessons ?? []).map((l) => lessonForPage(l, tz)),
+        eventType: et ? { _id: String(et._id), title: et.title ?? "", level: et.level ?? "", price: et.price ?? "" } : null,
         venue,
     });
 }
@@ -94,59 +63,46 @@ export async function PATCH(req: Request, { params }: Ctx) {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = await params;
-    if (!ObjectId.isValid(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    if (!isId(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     try {
         const body = await req.json().catch(() => ({}));
-        const patch: Record<string, unknown> = { updatedAt: new Date() };
+        const { db, ev } = await loadMine(id);
+        if (!ev) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-        if (typeof body.startTime === "string") patch.startTime = body.startTime.trim();
-        if (typeof body.endTime === "string") patch.endTime = body.endTime.trim();
+        const now = new Date();
+        // Planning or editing an event is the instructor's activity, so it's validated (decision 17).
+        const patch: Record<string, unknown> = { updatedAt: now, verifiedAt: now, verifiedBy: BLD_USER_ID };
+        const tz = ev.timeZone || DEFAULT_TIME_ZONE;
+
+        let times = { startAt: ev.startAt, endAt: ev.endAt };
+        if (typeof body.startTime === "string" || typeof body.endTime === "string") {
+            const current = eventTimesForPage(ev);
+            const next = eventInstants(ev.date, body.startTime ?? current.startTime, body.endTime ?? current.endTime, tz, body.endDayOffset);
+            if (!next) return NextResponse.json({ error: "Times must be like '6:30 PM'" }, { status: 400 });
+            times = next;
+            Object.assign(patch, next);
+        }
         if (typeof body.isCancelled === "boolean") patch.isCancelled = body.isCancelled;
         if (body.cancelNote === null || typeof body.cancelNote === "string") patch.cancelNote = clean(body.cancelNote);
         if (body.substitute === null || typeof body.substitute === "string") patch.substitute = clean(body.substitute);
         if (body.specialNote === null || typeof body.specialNote === "string") patch.specialNote = clean(body.specialNote);
 
-        const db = await getBldDb();
-        const oid = new ObjectId(id);
-
         if (body.lessons !== undefined) {
-            const newLessons = normalizeLessons(body.lessons);
-            patch.lessons = newLessons;
+            const lessons = lessonsFromPage(body.lessons, { date: ev.date, ...times, timeZone: tz }, ev.lessons ?? []);
+            patch.lessons = lessons;
 
-            // Read existing event to find which lessons are newly being committed
-            const existing = await db.collection("events").findOne(
-                { _id: oid },
-                { projection: { lessons: 1, eventTypeId: 1, date: 1 } }
-            );
-
-            if (existing) {
-                const oldLessons = Array.isArray(existing.lessons) ? existing.lessons : [];
-                const newlyCommitted = newLessons.filter((l, i) => {
-                    const wasCommitted = oldLessons[i]?.committed === true;
-                    return l.committed && !wasCommitted && (l.dance || l.danceId);
-                });
-
-                if (newlyCommitted.length > 0) {
-                    const venueName = await resolveVenueName(db, existing.eventTypeId);
-                    const date = String(existing.date ?? "");
-
-                    const lessonDocs = newlyCommitted.map((l) => {
-                        const doc: Record<string, unknown> = {
-                            venue: venueName,
-                            date: lessonTimeToIso(date, l.time),
-                        };
-                        if (l.danceId) doc.danceId = l.danceId;
-                        else doc.danceName = l.dance;
-                        return doc;
-                    });
-
-                    await db.collection("lessons").insertMany(lessonDocs);
-                }
+            // History for lessons newly marked taught (keyed on the lesson id, so re-saving never duplicates)
+            const before = new Map((ev.lessons ?? []).map((l) => [l._id, l.committed]));
+            const newlyTaught = lessons.filter((l) => l.committed && !before.get(l._id));
+            if (newlyTaught.length) {
+                const et = await db.collection<{ _id: string; venueId?: string }>("event_types").findOne({ _id: ev.eventTypeId! });
+                const venueId = et?.venueId ? String(et.venueId) : null;
+                await recordTaught(db, { ...ev, ...times }, newlyTaught, venueId, venueId ? await venueName(venueId) : "Unknown venue");
             }
         }
 
-        const res = await db.collection("events").updateOne({ _id: oid }, { $set: patch });
+        const res = await db.collection<{ _id: string; [key: string]: unknown }>("events").updateOne({ _id: id }, { $set: patch });
         if (res.matchedCount === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
         return NextResponse.json({ ok: true });

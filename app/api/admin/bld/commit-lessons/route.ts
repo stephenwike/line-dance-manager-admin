@@ -1,35 +1,22 @@
 import { NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
 import { getSession } from "@/lib/auth";
-import { getBldDb } from "@/lib/db";
 import { venueName } from "@/lib/venues";
 import { isYmd } from "@/lib/time";
-
-function lessonTimeToIso(date: string, time: string | null): string {
-    if (!time) return `${date}T00:00:00-07:00`;
-    const m = time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-    if (!m) return `${date}T00:00:00-07:00`;
-    let hh = Number(m[1]);
-    const mm = Number(m[2]);
-    if (m[3].toUpperCase() === "PM" && hh !== 12) hh += 12;
-    if (m[3].toUpperCase() === "AM" && hh === 12) hh = 0;
-    return `${date}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00-07:00`;
-}
-
-async function resolveVenueName(db: Awaited<ReturnType<typeof getBldDb>>, eventTypeId: unknown): Promise<string> {
-    try {
-        const etId = eventTypeId ? new ObjectId(String(eventTypeId)) : null;
-        if (!etId) return "Unknown venue";
-        const et = await db.collection("event_types").findOne({ _id: etId });
-        if (!et?.venueId) return "Unknown venue";
-        return await venueName(et.venueId);
-    } catch {
-        return "Unknown venue";
-    }
-}
+import {
+    BLD_USER_ID,
+    DEFAULT_TIME_ZONE,
+    eventTimesForPage,
+    getLessonsDb,
+    isId,
+    isMyEventType,
+    lessonForPage,
+    myEventTypeIds,
+    recordTaught,
+    type StoredEvent,
+} from "@/lib/lessons";
 
 // GET /api/admin/bld/commit-lessons?from=YYYY-MM-DD&to=YYYY-MM-DD
-// Returns events in range that have at least one uncommitted lesson
+// Stephen's events in range that have at least one lesson not yet marked taught
 export async function GET(req: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,47 +29,38 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "from and to must be YYYY-MM-DD" }, { status: 400 });
     }
 
-    const db = await getBldDb();
-
-    const events = await db.collection("events").find({
+    const db = await getLessonsDb();
+    const events = await db.collection<StoredEvent & { _id: string }>("events").find({
+        eventTypeId: { $in: await myEventTypeIds(db) },
         date: { $gte: from, $lte: to },
         isCancelled: { $ne: true },
         "lessons.committed": false,
-    }).sort({ date: 1, startTime: 1 }).toArray();
+    }).sort({ date: 1, startAt: 1 }).toArray();
 
     if (events.length === 0) return NextResponse.json([]);
 
-    // Join event types in one query
-    const etIds = [...new Set(events.map((e) => String(e.eventTypeId)).filter(Boolean))];
-    const etDocs = await db.collection("event_types").find({
-        _id: { $in: etIds.map((id) => new ObjectId(id)) }
-    }).toArray();
+    const etIds = [...new Set(events.map((e) => e.eventTypeId).filter(Boolean))] as string[];
+    const etDocs = await db.collection<{ _id: string; title?: string; level?: string }>("event_types").find({ _id: { $in: etIds } }).toArray();
     const etMap = Object.fromEntries(etDocs.map((e) => [String(e._id), e]));
 
     return NextResponse.json(events.map((ev) => {
-        const et = etMap[String(ev.eventTypeId)] ?? null;
-        const lessons = Array.isArray(ev.lessons) ? ev.lessons : [];
+        const et = etMap[ev.eventTypeId ?? ""] ?? null;
+        const times = eventTimesForPage(ev);
+        const tz = ev.timeZone || DEFAULT_TIME_ZONE;
         return {
             _id: String(ev._id),
-            eventTypeId: String(ev.eventTypeId ?? ""),
+            eventTypeId: ev.eventTypeId ?? "",
             date: ev.date ?? "",
-            startTime: ev.startTime ?? "",
-            endTime: ev.endTime ?? "",
-            lessons: lessons.map((l: Record<string, unknown>) => ({
-                time: l.time ?? null,
-                danceId: l.danceId ?? null,
-                dance: l.dance ?? null,
-                level: l.level ?? null,
-                link: l.link ?? null,
-                committed: !!l.committed,
-            })),
+            startTime: times.startTime,
+            endTime: times.endTime,
+            lessons: (ev.lessons ?? []).map((l) => lessonForPage(l, tz)),
             eventType: et ? { _id: String(et._id), title: et.title ?? "", level: et.level ?? "" } : null,
         };
     }));
 }
 
 // POST /api/admin/bld/commit-lessons
-// Body: { eventId: string }  — commits all uncommitted lessons for that event
+// Body: { eventId: string } — marks every lesson of that event taught and writes their history
 export async function POST(req: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -90,43 +68,28 @@ export async function POST(req: Request) {
     try {
         const body = await req.json().catch(() => ({}));
         const eventId = String(body.eventId ?? "").trim();
+        if (!isId(eventId)) return NextResponse.json({ error: "Invalid eventId" }, { status: 400 });
 
-        if (!ObjectId.isValid(eventId)) {
-            return NextResponse.json({ error: "Invalid eventId" }, { status: 400 });
+        const db = await getLessonsDb();
+        const ev = await db.collection<StoredEvent & { _id: string }>("events").findOne({ _id: eventId });
+        if (!ev || !ev.eventTypeId || !(await isMyEventType(db, ev.eventTypeId))) {
+            return NextResponse.json({ error: "Event not found" }, { status: 404 });
         }
 
-        const db = await getBldDb();
-        const oid = new ObjectId(eventId);
+        const existing = ev.lessons ?? [];
+        const newlyTaught = existing.filter((l) => !l.committed && !l.skipped && (l.dance || l.danceId)).map((l) => ({ ...l, committed: true }));
+        const lessons = existing.map((l) => (l.skipped ? l : { ...l, committed: true }));
 
-        const ev = await db.collection("events").findOne({ _id: oid }, { projection: { lessons: 1, eventTypeId: 1, date: 1 } });
-        if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 });
-
-        const existing = Array.isArray(ev.lessons) ? ev.lessons : [];
-        const lessons = existing.map((l: Record<string, unknown>) => ({ ...l, committed: true }));
-
-        // Write newly committed lessons to the lessons collection
-        const newlyCommitted = existing.filter((l: Record<string, unknown>) =>
-            !l.committed && (l.dance || l.danceId)
-        );
-
-        if (newlyCommitted.length > 0) {
-            const venueName = await resolveVenueName(db, ev.eventTypeId);
-            const date = String(ev.date ?? "");
-            const lessonDocs = newlyCommitted.map((l: Record<string, unknown>) => {
-                const doc: Record<string, unknown> = {
-                    venue: venueName,
-                    date: lessonTimeToIso(date, (l.time as string | null) ?? null),
-                };
-                if (l.danceId) doc.danceId = l.danceId;
-                else doc.danceName = l.dance;
-                return doc;
-            });
-            await db.collection("lessons").insertMany(lessonDocs);
+        if (newlyTaught.length > 0) {
+            const et = await db.collection<{ _id: string; venueId?: string }>("event_types").findOne({ _id: ev.eventTypeId });
+            const venueId = et?.venueId ? String(et.venueId) : null;
+            await recordTaught(db, ev, newlyTaught, venueId, venueId ? await venueName(venueId) : "Unknown venue");
         }
 
-        await db.collection("events").updateOne(
-            { _id: oid },
-            { $set: { lessons, updatedAt: new Date() } }
+        const now = new Date();
+        await db.collection<{ _id: string; [key: string]: unknown }>("events").updateOne(
+            { _id: eventId },
+            { $set: { lessons, updatedAt: now, verifiedAt: now, verifiedBy: BLD_USER_ID } },
         );
 
         return NextResponse.json({ ok: true });
