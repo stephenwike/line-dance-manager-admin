@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Kaushan_Script } from "next/font/google";
 import { ActionButton, Badge } from "@/components/ui";
 import { Field, inputStyle } from "@/components/form";
+
+// The brush font the post images use, so theme samples look like the real thing.
+const brush = Kaushan_Script({ weight: "400", subsets: ["latin"] });
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -12,8 +16,10 @@ interface ClassStyle {
     saved: Partial<Style> | null; suggested: Partial<Style> | null; effective: Style;
 }
 interface AdTypeStyle { saved: Partial<Style> | null; defaults: Style; effective: Style }
+interface Palette { ink: string; deep: string; brushFrom: string; brushTo: string; swoosh: string; highlight: string; accent: string }
+interface Theme { id: string; label: string; colors: string[]; palette: Palette }
 interface Data {
-    themes: { id: string; label: string; colors: string[] }[];
+    themes: Theme[];
     photos: { id: string; label: string }[];
     eventTypes: ClassStyle[];
     adTypes: { cancellation: AdTypeStyle; weekly_outline: AdTypeStyle };
@@ -27,6 +33,48 @@ const TABS: { kind: Kind; label: string; blurb: string }[] = [
     { kind: "cancellation", label: "Cancellations", blurb: "Posted when a class is cancelled (always after your OK)." },
     { kind: "weekly_outline", label: "Weekly schedule", blurb: "Posted Monday mornings with the week's classes." },
 ];
+
+// ── Theme sample ─────────────────────────────────────────────────────────────
+
+/** A small card in a theme's colors over the chosen photo: roughly how the post image will look. */
+function ThemeSample({ theme, photoUrl, selected, onClick }: { theme: Theme; photoUrl: string | null; selected: boolean; onClick: () => void }) {
+    const p = theme.palette;
+    return (
+        <button type="button" onClick={onClick} title={theme.label}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: 0, background: "none", border: "none", cursor: "pointer" }}>
+            <div style={{
+                position: "relative", width: 128, height: 160, borderRadius: 10, overflow: "hidden",
+                background: `linear-gradient(180deg, ${p.ink} 0%, ${p.ink} 60%, ${p.deep} 100%)`,
+                outline: `3px solid ${selected ? "var(--accent)" : "transparent"}`, outlineOffset: 2,
+                boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+            }}>
+                {photoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={photoUrl} alt="" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 88, objectFit: "cover" }} />
+                )}
+                <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 88, background: `linear-gradient(180deg, ${p.ink}55 0%, ${p.ink}33 40%, ${p.ink} 100%)` }} />
+                <div style={{ position: "absolute", left: 8, right: 8, top: 56, display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: 8, fontWeight: 800, color: "#fff", letterSpacing: 0.3 }}>
+                        MON <span style={{ color: p.highlight }}>OCT 26</span> · 5:00 PM
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 900, fontStyle: "italic", color: "#fff", lineHeight: 1.05, textTransform: "uppercase" }}>Charlie&apos;s</span>
+                    <span className={brush.className} style={{
+                        fontSize: 22, lineHeight: 1.1, transform: "rotate(-5deg)", transformOrigin: "left", width: "fit-content",
+                        backgroundImage: `linear-gradient(90deg, ${p.brushFrom}, ${p.brushTo})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+                    }}>Tonight!</span>
+                    <svg width="64" height="8" viewBox="0 0 64 8" style={{ marginTop: -4 }}>
+                        <path d="M2 6 C 20 1, 44 1, 62 3" stroke={p.swoosh} strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                    </svg>
+                    <div style={{ marginTop: 4, padding: "3px 5px", borderRadius: 4, border: `1px solid ${p.accent}`, background: `${p.ink}cc`, display: "flex", gap: 4, fontSize: 7, fontWeight: 700 }}>
+                        <span style={{ color: p.highlight }}>6:00 PM</span>
+                        <span style={{ color: "#fff" }}>Copperhead Road</span>
+                    </div>
+                </div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: selected ? 700 : 500, color: selected ? "var(--text-primary)" : "var(--text-secondary)" }}>{theme.label}</span>
+        </button>
+    );
+}
 
 // ── Editor ───────────────────────────────────────────────────────────────────
 
@@ -81,15 +129,10 @@ function StyleEditor({ kind, saveKey, initial, hasSaved, data, previewClass, onS
             {ownLook && (
                 <>
                     <Field label="Theme">
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
                             {data.themes.map((t) => (
-                                <button key={t.id} type="button" onClick={() => set("theme", t.id)}
-                                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", background: "var(--surface-raised)", border: `2px solid ${style.theme === t.id ? "var(--accent)" : "var(--border)"}`, fontSize: 12, color: "var(--text-primary)" }}>
-                                    <span style={{ display: "flex" }}>
-                                        {t.colors.map((c) => <span key={c} style={{ width: 14, height: 14, borderRadius: 99, background: c, marginRight: -4, border: "1px solid rgba(0,0,0,0.2)" }} />)}
-                                    </span>
-                                    <span style={{ marginLeft: 6 }}>{t.label}</span>
-                                </button>
+                                <ThemeSample key={t.id} theme={t} selected={style.theme === t.id} onClick={() => set("theme", t.id)}
+                                    photoUrl={data.posterUrl ? `${data.posterUrl}/api/photos/${style.photo}` : null} />
                             ))}
                         </div>
                     </Field>
