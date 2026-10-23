@@ -45,9 +45,15 @@ function FacebookLink({ post }: { post: Post }) {
     const id = post.fbPostId;
     if (!id) return null;
     if (id.startsWith("dry-run")) return <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>dry run (not on Facebook)</span>;
-    if (post.kind === "test") return <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>hidden test post (open to see it)</span>;
+    const linkStyle = { fontSize: 12, color: "var(--accent-text)", textDecoration: "underline" } as const;
+    if (post.kind === "test") {
+        // Hidden posts have no public post page; Facebook's photo page for them opens for Page admins.
+        return post.fbPermalink
+            ? <a href={post.fbPermalink} target="_blank" rel="noreferrer" style={linkStyle}>See hidden post ↗</a>
+            : <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>hidden test post</span>;
+    }
     const href = post.fbPermalink ?? `https://www.facebook.com/${id}`;
-    return <a href={href} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--accent-text)", textDecoration: "underline" }}>View on Facebook ↗</a>;
+    return <a href={href} target="_blank" rel="noreferrer" style={linkStyle}>View on Facebook ↗</a>;
 }
 
 interface StoredPost { image: string | null; caption: string | null; published: boolean | null; link: string | null; createdAt: string | null }
