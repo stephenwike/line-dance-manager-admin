@@ -8,7 +8,7 @@ import { ActionButton } from "@/components/ui";
 
 type Status = "pending" | "approved" | "publishing" | "published" | "skipped" | "expired" | "failed";
 interface Post {
-    _id: string; kind: "lesson" | "cancellation" | "weekly_outline"; label: string; status: Status;
+    _id: string; kind: "lesson" | "cancellation" | "weekly_outline" | "test"; label: string; status: Status;
     message: string; editedMessage: string | null; issues: { check: string; message: string }[];
     planHash: string; alertAt: string; expireAt: string; alertedAt: string | null;
     fbPostId: string | null; publishedAt: string | null; error: string | null; note: string | null;
@@ -17,7 +17,7 @@ interface Post {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const KIND_LABEL: Record<Post["kind"], string> = { lesson: "Lesson plan", cancellation: "Cancellation", weekly_outline: "Weekly outline" };
+const KIND_LABEL: Record<Post["kind"], string> = { lesson: "Lesson plan", cancellation: "Cancellation", weekly_outline: "Weekly outline", test: "Test (hidden on Facebook)" };
 const APPROVABLE: Status[] = ["pending", "failed", "expired"];
 
 function formatWhen(iso: string) {
