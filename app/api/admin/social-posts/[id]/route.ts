@@ -7,7 +7,7 @@ type Ctx = { params: Promise<{ id: string }> };
 const APPROVABLE = ["pending", "failed", "expired"];
 const SKIPPABLE = ["pending", "approved", "failed", "expired"];
 
-// Ask beyond-line-dance-webhooks to publish now instead of on its next tick (up to 15 minutes).
+// Ask beyond-line-dance-webhooks to publish now instead of on its next tick (up to 30 minutes).
 // If this fails, the tick still publishes the approved post.
 async function publishNow(id: string): Promise<{ published: boolean; status?: string; error?: string | null }> {
     const base = process.env.WEBHOOKS_URL?.replace(/\/$/, "");
