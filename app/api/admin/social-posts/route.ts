@@ -10,13 +10,15 @@ export async function GET() {
 
     try {
         const col = (await getBldDb()).collection("social_posts");
+        const runs = await (await getBldDb()).collection<{ _id: string; lastRunAt: Date; error: string | null }>("poster_runs").find().toArray();
+        const lastRun = Object.fromEntries(runs.map((r) => [r._id, { at: r.lastRunAt, error: r.error }]));
         const [open, recent] = await Promise.all([
             col.find({ status: { $in: ["pending", "approved", "publishing", "failed"] } }).sort({ expireAt: 1 }).toArray(),
             col.find({ status: { $in: ["published", "skipped", "expired"] } }).sort({ updatedAt: -1 }).limit(40).toArray(),
         ]);
         // The poster serves each post's image at /api/card/:id; the page shows it as the preview.
         const posterUrl = process.env.WEBHOOKS_URL?.replace(/\/$/, "") ?? null;
-        return NextResponse.json({ open, recent, posterUrl });
+        return NextResponse.json({ open, recent, posterUrl, lastRun });
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         return NextResponse.json({ error: msg }, { status: 500 });

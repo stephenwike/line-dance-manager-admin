@@ -221,6 +221,7 @@ function SocialPostsInner() {
     const [open, setOpen] = useState<Post[] | null>(null);
     const [recent, setRecent] = useState<Post[]>([]);
     const [posterUrl, setPosterUrl] = useState<string | null>(null);
+    const [lastRun, setLastRun] = useState<{ scheduled?: { at: string; error: string | null } } | null>(null);
     const [loadErr, setLoadErr] = useState<string | null>(null);
     const [flash, setFlash] = useState<string | null>(null);
 
@@ -233,6 +234,7 @@ function SocialPostsInner() {
                 setOpen(data.open);
                 setRecent(data.recent);
                 setPosterUrl(data.posterUrl ?? null);
+                setLastRun(data.lastRun ?? null);
             })
             .catch((e: unknown) => setLoadErr(e instanceof Error ? e.message : String(e)));
     }, []);
@@ -256,6 +258,11 @@ function SocialPostsInner() {
                 <ActionButton label="Refresh" variant="ghost" onClick={load} />
             </div>
 
+            <p style={{ fontSize: 12, color: lastRun?.scheduled?.error ? "var(--danger)" : "var(--text-tertiary)", marginBottom: 12 }}>
+                {lastRun?.scheduled
+                    ? <>Last automatic check: {formatWhen(lastRun.scheduled.at)}{lastRun.scheduled.error ? ` (failed: ${lastRun.scheduled.error})` : ""}. It runs every 30 minutes.</>
+                    : "No automatic check has run yet."}
+            </p>
             {flash && <p style={{ fontSize: 13, color: "var(--success-text)", background: "var(--success-subtle)", padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>{flash}</p>}
             {loadErr && <p style={{ fontSize: 13, color: "var(--danger)", marginBottom: 12 }}>{loadErr}</p>}
 
