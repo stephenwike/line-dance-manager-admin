@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getBldDb } from "@/lib/db";
+import { callPoster } from "@/lib/poster";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -10,18 +11,9 @@ const SKIPPABLE = ["pending", "approved", "failed", "expired"];
 // Ask beyond-line-dance-webhooks to publish now instead of on its next tick (up to 30 minutes).
 // If this fails, the tick still publishes the approved post.
 async function publishNow(id: string): Promise<{ published: boolean; status?: string; error?: string | null }> {
-    const base = process.env.WEBHOOKS_URL?.replace(/\/$/, "");
-    const secret = process.env.WEBHOOKS_INTERNAL_SECRET;
-    if (!base || !secret) return { published: false, error: "WEBHOOKS_URL is not set; it will publish on the next tick" };
-    try {
-        const res = await fetch(`${base}/api/posts/${encodeURIComponent(id)}/publish`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${secret}` },
-        });
-        return await res.json();
-    } catch (e: unknown) {
-        return { published: false, error: `${e instanceof Error ? e.message : String(e)}; it will publish on the next tick` };
-    }
+    const r = await callPoster(`/api/posts/${encodeURIComponent(id)}/publish`);
+    if (r.error && r.published === undefined) return { published: false, error: `${r.error}; it will publish on the next tick` };
+    return r as { published: boolean; status?: string; error?: string | null };
 }
 
 /**

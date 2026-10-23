@@ -3,12 +3,14 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ActionButton } from "@/components/ui";
+import { PlanEditor } from "@/components/PlanEditor";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type Status = "pending" | "approved" | "publishing" | "published" | "skipped" | "expired" | "failed";
 interface Post {
     _id: string; kind: "lesson" | "cancellation" | "weekly_outline" | "test"; label: string; status: Status;
+    eventTypeId: string | null; eventId: string | null; date: string;
     message: string; editedMessage: string | null; issues: { check: string; message: string }[];
     planHash: string; alertAt: string; expireAt: string; alertedAt: string | null;
     fbPostId: string | null; publishedAt: string | null; error: string | null; note: string | null;
@@ -50,7 +52,16 @@ function OpenPost({ post, highlighted, onDone }: { post: Post; highlighted: bool
     const [text, setText] = useState(post.editedMessage ?? post.message);
     const [busy, setBusy] = useState<"approve" | "skip" | null>(null);
     const [err, setErr] = useState<string | null>(null);
+    const [editingPlan, setEditingPlan] = useState(false);
     const canAct = APPROVABLE.includes(post.status) || post.status === "approved";
+    const canEditPlan = canAct && post.kind !== "weekly_outline" && !!post.eventTypeId && !!post.date;
+
+    // The plan was saved: have the poster redraft this post now, then reload the list.
+    async function planSaved() {
+        const res = await fetch(`/api/admin/social-posts/${post._id}/refresh`, { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        onDone(res.ok ? "Plan saved. The post below is updated from it." : `Plan saved. ${data.error ?? "The post updates on the next tick."}`);
+    }
 
     async function act(action: "approve" | "skip") {
         if (action === "skip" && !confirm("Skip this post? It won't be published.")) return;
@@ -99,10 +110,21 @@ function OpenPost({ post, highlighted, onDone }: { post: Post; highlighted: bool
                 {post.error && <p style={{ fontSize: 13, color: "var(--danger)" }}>Facebook error: {post.error}</p>}
                 {post.note && <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{post.note}</p>}
 
+                {canEditPlan && (
+                    <div>
+                        <ActionButton label={editingPlan ? "Close plan" : "Edit plan"} variant="ghost" onClick={() => setEditingPlan((v) => !v)} />
+                    </div>
+                )}
+                {editingPlan && (
+                    <div style={{ padding: 12, borderRadius: 10, border: "1px dashed var(--border-strong)", background: "var(--bg)" }}>
+                        <PlanEditor eventId={post.eventId} eventTypeId={post.eventTypeId ?? undefined} date={post.date} onSaved={planSaved} />
+                    </div>
+                )}
+
                 <textarea value={text} onChange={(e) => setText(e.target.value)} disabled={!canAct} rows={Math.min(16, text.split("\n").length + 1)}
                     style={{ width: "100%", padding: "10px 12px", fontSize: 13, lineHeight: 1.5, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-raised)", color: "var(--text-primary)", outline: "none", fontFamily: "inherit", resize: "vertical" }} />
                 <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-                    Fixing the plan in Plan Lesson updates this text on the next tick, and a fixed plan posts on its own. Editing the text here only changes this post.
+                    This is what will be posted. Fix the plan with Edit plan and the text updates from it; once nothing is missing, it posts on its own at the next check. Editing the text here only changes this post.
                 </p>
 
                 {err && <p style={{ fontSize: 13, color: "var(--danger)" }}>{err}</p>}
