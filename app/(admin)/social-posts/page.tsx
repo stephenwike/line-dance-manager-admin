@@ -45,9 +45,59 @@ function FacebookLink({ post }: { post: Post }) {
     const id = post.fbPostId;
     if (!id) return null;
     if (id.startsWith("dry-run")) return <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>dry run (not on Facebook)</span>;
-    if (post.kind === "test") return <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>hidden test post</span>;
+    if (post.kind === "test") return <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>hidden test post (open to see it)</span>;
     const href = post.fbPermalink ?? `https://www.facebook.com/${id}`;
     return <a href={href} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--accent-text)", textDecoration: "underline" }}>View on Facebook ↗</a>;
+}
+
+interface StoredPost { image: string | null; caption: string | null; published: boolean | null; link: string | null; createdAt: string | null }
+
+/** Shows Facebook's own copy of a published post: the only way to see hidden (test) posts. */
+function FacebookCopy({ post }: { post: Post }) {
+    const [copy, setCopy] = useState<StoredPost | null>(null);
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState<string | null>(null);
+    if (!post.fbPostId || post.fbPostId.startsWith("dry-run")) return null;
+
+    async function load() {
+        setBusy(true);
+        setErr(null);
+        try {
+            const res = await fetch(`/api/admin/social-posts/${post._id}/facebook`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error ?? "Failed");
+            setCopy(data);
+        } catch (e: unknown) {
+            setErr(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    if (!copy) {
+        return (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <ActionButton label={busy ? "Loading…" : "See it on Facebook"} variant="ghost" loading={busy} onClick={load} />
+                {err && <span style={{ fontSize: 12, color: "var(--danger)" }}>{err}</span>}
+            </div>
+        );
+    }
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-raised)" }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>
+                {copy.published === false ? "Stored on Facebook, hidden: not on your Page or in anyone's feed" : "As published on Facebook"}
+                {copy.createdAt ? ` · ${formatWhen(copy.createdAt)}` : ""}
+                {copy.link && <> · <a href={copy.link} target="_blank" rel="noreferrer" style={{ color: "var(--accent-text)" }}>open ↗</a></>}
+            </p>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                {copy.image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={copy.image} alt="Image on Facebook" style={{ width: 260, height: "auto", borderRadius: 8, border: "1px solid var(--border)" }} />
+                )}
+                <pre style={{ flex: "1 1 240px", whiteSpace: "pre-wrap", fontSize: 12, color: "var(--text-primary)", margin: 0, fontFamily: "inherit" }}>{copy.caption}</pre>
+            </div>
+        </div>
+    );
 }
 
 /** The image that goes out with the post, served by the poster. */
@@ -233,6 +283,7 @@ function SocialPostsInner() {
                                     <CardPreview post={p} posterUrl={posterUrl} width={160} />
                                     <pre style={{ flex: "1 1 240px", whiteSpace: "pre-wrap", fontSize: 12, color: "var(--text-secondary)", margin: 0, fontFamily: "inherit" }}>{p.editedMessage ?? p.message}</pre>
                                 </div>
+                                <div style={{ marginTop: 10 }}><FacebookCopy post={p} /></div>
                             </details>
                         ))}
                     </div>
