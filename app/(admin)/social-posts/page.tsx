@@ -240,6 +240,17 @@ function SocialPostsInner() {
     }, []);
 
     useEffect(() => { load(); }, [load]);
+
+    async function clearPosts(id?: string) {
+        if (!id && !confirm("Clear all finished posts from this page? They're kept in the database, just hidden here.")) return;
+        const res = id
+            ? await fetch(`/api/admin/social-posts/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "clear" }) })
+            : await fetch("/api/admin/social-posts/clear", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { setLoadErr(data.error ?? "Couldn't clear"); return; }
+        setFlash(id ? "Cleared." : `Cleared ${data.cleared} post${data.cleared === 1 ? "" : "s"}.`);
+        load();
+    }
     useEffect(() => {
         if (highlightId && open) document.getElementById(highlightId)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, [highlightId, open]);
@@ -278,7 +289,13 @@ function SocialPostsInner() {
 
             {recent.length > 0 && (
                 <div style={{ marginTop: 28 }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Recent</p>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Recent</p>
+                        <button type="button" onClick={() => clearPosts()}
+                            style={{ fontSize: 12, color: "var(--text-tertiary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                            Clear all
+                        </button>
+                    </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {recent.map((p) => (
                             <details key={p._id} style={{ padding: "10px 14px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -291,6 +308,11 @@ function SocialPostsInner() {
                                     </div>
                                     <FacebookLink post={p} />
                                     <StatusPill status={p.status} />
+                                    <button type="button" title="Clear from this page" aria-label="Clear from this page"
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); clearPosts(p._id); }}
+                                        style={{ fontSize: 16, lineHeight: 1, color: "var(--text-tertiary)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>
+                                        ×
+                                    </button>
                                 </summary>
                                 <div style={{ display: "flex", gap: 12, marginTop: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
                                     <CardPreview post={p} posterUrl={posterUrl} width={160} />

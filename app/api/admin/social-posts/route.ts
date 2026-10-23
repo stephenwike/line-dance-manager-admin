@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getBldDb } from "@/lib/db";
+import { FINISHED_STATUSES } from "@/lib/socialPosts";
 
 // Facebook posts drafted by beyond-line-dance-webhooks (ldco-lessons.social_posts).
-// Returns the ones waiting on you, then the 40 most recent others.
+// Returns the ones waiting on you, then the 40 most recent others that haven't been cleared.
 export async function GET() {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -14,7 +15,7 @@ export async function GET() {
         const lastRun = Object.fromEntries(runs.map((r) => [r._id, { at: r.lastRunAt, error: r.error }]));
         const [open, recent] = await Promise.all([
             col.find({ status: { $in: ["pending", "approved", "publishing", "failed"] } }).sort({ expireAt: 1 }).toArray(),
-            col.find({ status: { $in: ["published", "skipped", "expired"] } }).sort({ updatedAt: -1 }).limit(40).toArray(),
+            col.find({ status: { $in: FINISHED_STATUSES }, archivedAt: { $exists: false } }).sort({ updatedAt: -1 }).limit(40).toArray(),
         ]);
         // The poster serves each post's image at /api/card/:id; the page shows it as the preview.
         const posterUrl = process.env.WEBHOOKS_URL?.replace(/\/$/, "") ?? null;

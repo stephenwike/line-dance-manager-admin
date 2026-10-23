@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getBldDb } from "@/lib/db";
 import { callPoster } from "@/lib/poster";
+import { FINISHED_STATUSES } from "@/lib/socialPosts";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const APPROVABLE = ["pending", "failed", "expired"];
 const SKIPPABLE = ["pending", "approved", "failed", "expired"];
+
 
 // Ask beyond-line-dance-webhooks to publish now instead of on its next tick (up to 30 minutes).
 // If this fails, the tick still publishes the approved post.
@@ -30,6 +32,12 @@ export async function PATCH(req: Request, { params }: Ctx) {
     const post = await col.findOne({ _id: id });
     if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const now = new Date();
+
+    if (body.action === "clear") {
+        const r = await col.updateOne({ _id: id, status: { $in: FINISHED_STATUSES } }, { $set: { archivedAt: now } });
+        if (!r.matchedCount) return NextResponse.json({ error: `Only finished posts can be cleared (this one is ${post.status})` }, { status: 409 });
+        return NextResponse.json({ ok: true });
+    }
 
     if (body.action === "skip") {
         const r = await col.updateOne({ _id: id, status: { $in: SKIPPABLE } }, {
@@ -56,5 +64,5 @@ export async function PATCH(req: Request, { params }: Ctx) {
         return NextResponse.json({ ok: true, ...(await publishNow(id)) });
     }
 
-    return NextResponse.json({ error: "action must be approve or skip" }, { status: 400 });
+    return NextResponse.json({ error: "action must be approve, skip or clear" }, { status: 400 });
 }
