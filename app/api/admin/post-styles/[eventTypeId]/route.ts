@@ -4,15 +4,15 @@ import { getBldDb } from "@/lib/db";
 
 type Ctx = { params: Promise<{ eventTypeId: string }> };
 
-/** bld.post_styles: one document per event type (_id = eventTypeId); the poster reads it when drafting. */
-type StyleDoc = { _id: string; theme?: string; photo?: string; headline?: string; hook?: string; cta?: string; hashtags?: string[]; updatedAt: Date };
+/** bld.post_styles: _id = an eventTypeId (lesson posts) or "type:cancellation" / "type:weekly_outline"; the poster reads it when drafting. */
+type StyleDoc = { _id: string; theme?: string; photo?: string; headline?: string; hook?: string; cta?: string; hashtags?: string[]; matchClass?: boolean; updatedAt: Date };
 
 function text(v: unknown, max: number): string | undefined {
     const s = typeof v === "string" ? v.trim() : "";
     return s ? s.slice(0, max) : undefined;
 }
 
-// Save a class's style. Unknown themes or photos fall back to the default when drafting.
+// Save a class's (or ad type's) style. Unknown themes or photos fall back to the default when drafting.
 export async function PUT(req: Request, { params }: Ctx) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,7 +24,7 @@ export async function PUT(req: Request, { params }: Ctx) {
     const doc: Omit<StyleDoc, "_id"> = {
         theme: text(body.theme, 40), photo: text(body.photo, 60),
         headline: text(body.headline, 40), hook: text(body.hook, 200), cta: text(body.cta, 60),
-        hashtags, updatedAt: new Date(),
+        hashtags, ...(typeof body.matchClass === "boolean" ? { matchClass: body.matchClass } : {}), updatedAt: new Date(),
     };
     await (await getBldDb()).collection<StyleDoc>("post_styles").replaceOne({ _id: eventTypeId }, doc, { upsert: true });
     return NextResponse.json({ ok: true });
