@@ -13,7 +13,8 @@ interface Post {
     eventTypeId: string | null; eventId: string | null; date: string;
     message: string; editedMessage: string | null; issues: { check: string; message: string }[];
     planHash: string; alertAt: string; expireAt: string; alertedAt: string | null;
-    fbPostId: string | null; publishedAt: string | null; error: string | null; note: string | null;
+    fbPostId: string | null; fbPermalink?: string | null; publishedAt: string | null; error: string | null; note: string | null;
+    card?: unknown;
     updatedAt: string;
 }
 
@@ -40,15 +41,28 @@ function StatusPill({ status }: { status: Status }) {
     return <span style={{ fontSize: 11, color: fg, background: bg, padding: "3px 8px", borderRadius: 20, fontWeight: 600 }}>{status}</span>;
 }
 
-function FacebookLink({ id }: { id: string | null }) {
+function FacebookLink({ post }: { post: Post }) {
+    const id = post.fbPostId;
     if (!id) return null;
     if (id.startsWith("dry-run")) return <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>dry run (not on Facebook)</span>;
-    return <a href={`https://www.facebook.com/${id}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--accent-text)", textDecoration: "underline" }}>View on Facebook ↗</a>;
+    if (post.kind === "test") return <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>hidden test post</span>;
+    const href = post.fbPermalink ?? `https://www.facebook.com/${id}`;
+    return <a href={href} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--accent-text)", textDecoration: "underline" }}>View on Facebook ↗</a>;
+}
+
+/** The image that goes out with the post, served by the poster. */
+function CardPreview({ post, posterUrl, width }: { post: Post; posterUrl: string | null; width: number }) {
+    if (!posterUrl || !post.card) return null;
+    return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`${posterUrl}/api/card/${post._id}?v=${post.planHash}`} alt="Post image" width={width} height={Math.round(width * 1.25)}
+            style={{ width, height: "auto", aspectRatio: "4 / 5", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-raised)" }} />
+    );
 }
 
 // ── Open post card ───────────────────────────────────────────────────────────
 
-function OpenPost({ post, highlighted, onDone }: { post: Post; highlighted: boolean; onDone: (msg: string) => void }) {
+function OpenPost({ post, posterUrl, highlighted, onDone }: { post: Post; posterUrl: string | null; highlighted: boolean; onDone: (msg: string) => void }) {
     const [text, setText] = useState(post.editedMessage ?? post.message);
     const [busy, setBusy] = useState<"approve" | "skip" | null>(null);
     const [err, setErr] = useState<string | null>(null);
@@ -121,10 +135,13 @@ function OpenPost({ post, highlighted, onDone }: { post: Post; highlighted: bool
                     </div>
                 )}
 
-                <textarea value={text} onChange={(e) => setText(e.target.value)} disabled={!canAct} rows={Math.min(16, text.split("\n").length + 1)}
-                    style={{ width: "100%", padding: "10px 12px", fontSize: 13, lineHeight: 1.5, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-raised)", color: "var(--text-primary)", outline: "none", fontFamily: "inherit", resize: "vertical" }} />
+                <div style={{ display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <CardPreview post={post} posterUrl={posterUrl} width={260} />
+                    <textarea value={text} onChange={(e) => setText(e.target.value)} disabled={!canAct} rows={Math.min(16, text.split("\n").length + 1)}
+                    style={{ flex: "1 1 280px", minHeight: 325, padding: "10px 12px", fontSize: 13, lineHeight: 1.5, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-raised)", color: "var(--text-primary)", outline: "none", fontFamily: "inherit", resize: "vertical" }} />
+                </div>
                 <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-                    This is what will be posted. Fix the plan with Edit plan and the text updates from it; once nothing is missing, it posts on its own at the next check. Editing the text here only changes this post.
+                    This is what will be posted: the image with this text as its caption. Fix the plan with Edit plan and the text updates from it; once nothing is missing, it posts on its own at the next check. Editing the text here only changes this post.
                 </p>
 
                 {err && <p style={{ fontSize: 13, color: "var(--danger)" }}>{err}</p>}
@@ -147,6 +164,7 @@ function SocialPostsInner() {
     const highlightId = useSearchParams().get("id");
     const [open, setOpen] = useState<Post[] | null>(null);
     const [recent, setRecent] = useState<Post[]>([]);
+    const [posterUrl, setPosterUrl] = useState<string | null>(null);
     const [loadErr, setLoadErr] = useState<string | null>(null);
     const [flash, setFlash] = useState<string | null>(null);
 
@@ -158,6 +176,7 @@ function SocialPostsInner() {
                 setLoadErr(null);
                 setOpen(data.open);
                 setRecent(data.recent);
+                setPosterUrl(data.posterUrl ?? null);
             })
             .catch((e: unknown) => setLoadErr(e instanceof Error ? e.message : String(e)));
     }, []);
@@ -190,7 +209,7 @@ function SocialPostsInner() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {open?.map((p) => (
                     // Keyed on the text too, so a refreshed plan resets the editor
-                    <OpenPost key={`${p._id}:${p.planHash}:${p.editedMessage ?? ""}`} post={p} highlighted={p._id === highlightId} onDone={(msg) => { setFlash(msg); load(); }} />
+                    <OpenPost key={`${p._id}:${p.planHash}:${p.editedMessage ?? ""}`} post={p} posterUrl={posterUrl} highlighted={p._id === highlightId} onDone={(msg) => { setFlash(msg); load(); }} />
                 ))}
             </div>
 
@@ -207,10 +226,13 @@ function SocialPostsInner() {
                                             {KIND_LABEL[p.kind]} · {formatWhen(p.publishedAt ?? p.updatedAt)}{p.note ? ` · ${p.note}` : ""}
                                         </p>
                                     </div>
-                                    <FacebookLink id={p.fbPostId} />
+                                    <FacebookLink post={p} />
                                     <StatusPill status={p.status} />
                                 </summary>
-                                <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "var(--text-secondary)", marginTop: 10, fontFamily: "inherit" }}>{p.editedMessage ?? p.message}</pre>
+                                <div style={{ display: "flex", gap: 12, marginTop: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                                    <CardPreview post={p} posterUrl={posterUrl} width={160} />
+                                    <pre style={{ flex: "1 1 240px", whiteSpace: "pre-wrap", fontSize: 12, color: "var(--text-secondary)", margin: 0, fontFamily: "inherit" }}>{p.editedMessage ?? p.message}</pre>
+                                </div>
                             </details>
                         ))}
                     </div>

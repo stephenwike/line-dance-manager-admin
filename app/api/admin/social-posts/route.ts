@@ -14,7 +14,9 @@ export async function GET() {
             col.find({ status: { $in: ["pending", "approved", "publishing", "failed"] } }).sort({ expireAt: 1 }).toArray(),
             col.find({ status: { $in: ["published", "skipped", "expired"] } }).sort({ updatedAt: -1 }).limit(40).toArray(),
         ]);
-        return NextResponse.json({ open, recent });
+        // The poster serves each post's image at /api/card/:id; the page shows it as the preview.
+        const posterUrl = process.env.WEBHOOKS_URL?.replace(/\/$/, "") ?? null;
+        return NextResponse.json({ open, recent, posterUrl });
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         return NextResponse.json({ error: msg }, { status: 500 });
